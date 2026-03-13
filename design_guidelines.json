@@ -1,0 +1,231 @@
+{
+  "design_system": {
+    "typography": {
+      "font_family": {
+        "headings": "Outfit, sans-serif",
+        "body": "Inter, sans-serif",
+        "mono": "JetBrains Mono, monospace"
+      },
+      "scale": {
+        "h1": "text-4xl md:text-5xl font-bold tracking-tight",
+        "h2": "text-2xl md:text-3xl font-semibold tracking-tight",
+        "h3": "text-xl font-semibold tracking-tight text-zinc-100",
+        "label": "text-xs font-bold uppercase tracking-widest text-zinc-500"
+      }
+    },
+    "colors": {
+      "palette": {
+        "background": {
+          "default": "#0f0f10",
+          "paper": "#18181b",
+          "subtle": "#27272a"
+        },
+        "primary": {
+          "DEFAULT": "#ffffff",
+          "foreground": "#09090b"
+        },
+        "accents": {
+          "fire": "#ef4444",
+          "gold": "#d4af37",
+          "blue": "#3b82f6",
+          "green": "#22c55e",
+          "amber": "#f59e0b",
+          "purple": "#7c3aed"
+        },
+        "text": {
+          "primary": "#f4f4f5",
+          "secondary": "#a1a1aa",
+          "muted": "#52525b"
+        },
+        "border": {
+          "default": "#27272a",
+          "active": "#3f3f46"
+        }
+      },
+      "semantic": {
+        "success": "text-green-500 bg-green-500/10 border-green-500/20",
+        "warning": "text-amber-500 bg-amber-500/10 border-amber-500/20",
+        "danger": "text-red-500 bg-red-500/10 border-red-500/20",
+        "info": "text-blue-500 bg-blue-500/10 border-blue-500/20",
+        "premium": "text-[#d4af37] bg-[#d4af37]/10 border-[#d4af37]/20"
+      }
+    },
+    "layout": {
+      "spacing": {
+        "container_padding": "p-6 md:p-8 lg:p-12",
+        "section_gap": "gap-8",
+        "item_gap": "gap-4"
+      },
+      "grid_strategies": {
+        "command_center": "grid grid-cols-1 lg:grid-cols-12 gap-6",
+        "site_strategist": "grid grid-cols-1 lg:grid-cols-3 gap-6 h-[calc(100vh-100px)]",
+        "ground_up": "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6",
+        "ops_launchpad": "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"
+      },
+      "border_radius": {
+        "card": "rounded-lg",
+        "button": "rounded-md",
+        "badge": "rounded-full"
+      }
+    },
+    "visual_enhancers": {
+      "shadows": {
+        "card": "shadow-[0_0_0_1px_rgba(255,255,255,0.05),0_4px_12px_rgba(0,0,0,0.5)]",
+        "hover": "hover:shadow-[0_0_0_1px_rgba(255,255,255,0.1),0_8px_24px_rgba(0,0,0,0.6)]"
+      },
+      "gradients": {
+        "subtle_overlay": "bg-gradient-to-b from-transparent to-black/50",
+        "purple_avatar": "bg-gradient-to-br from-purple-600 to-purple-800",
+        "cyan_avatar": "bg-gradient-to-br from-cyan-600 to-cyan-800"
+      }
+    }
+  },
+  "components_map": {
+    "panel": {
+      "component": "Card",
+      "props": "className='bg-[#18181b] border-zinc-800/50 text-zinc-100'",
+      "notes": "Base container for all modules"
+    },
+    "badge": {
+      "component": "Badge",
+      "variants": {
+        "badge-fire": "bg-red-500/10 text-red-500 border border-red-500/20 hover:bg-red-500/20",
+        "badge-blue": "bg-blue-500/10 text-blue-500 border border-blue-500/20 hover:bg-blue-500/20",
+        "badge-green": "bg-green-500/10 text-green-500 border border-green-500/20 hover:bg-green-500/20",
+        "badge-amber": "bg-amber-500/10 text-amber-500 border border-amber-500/20 hover:bg-amber-500/20"
+      }
+    },
+    "progress": {
+      "component": "Progress",
+      "props": "className='h-2 bg-zinc-800'",
+      "notes": "Custom indicator colors via inline styles or utility classes (e.g., bg-red-500)"
+    },
+    "tabs": {
+      "component": "Tabs",
+      "notes": "Use for switching between the 6 modules"
+    },
+    "buttons": {
+      "primary": "bg-zinc-100 text-zinc-900 hover:bg-zinc-200 shadow-none font-medium",
+      "secondary": "bg-zinc-800 text-zinc-100 hover:bg-zinc-700 border border-zinc-700"
+    }
+  },
+  "modules": {
+    "command_center": {
+      "title": "Command Center",
+      "layout": "Grid: Left (Project Status, Stepper, Critical Path) 8 cols | Right (Budget, Team) 4 cols",
+      "features": [
+        "Phase Stepper (Concept -> Site -> Construction -> Opening -> Live)",
+        "Critical Path Task List (Urgent/Active/Pending badges)",
+        "Budget Health Card (Total Invested, Variance, Category Breakdown)",
+        "On-Site Team Grid (Avatars)"
+      ]
+    },
+    "site_strategist": {
+      "title": "Site Strategist",
+      "layout": "Split View: Map (2/3 width) | Insights Panel (1/3 width)",
+      "features": [
+        "Interactive Map (Leaflet/Mapbox)",
+        "Demographics Grid (Foot Traffic, Competition, Income)",
+        "Lease Analyzer (Alerts for Restrictive Clauses)"
+      ]
+    },
+    "ground_up": {
+      "title": "Ground Up",
+      "layout": "Masonry or Grid",
+      "features": [
+        "3D Floor Plan Preview",
+        "Permit Compliance Tracker (Status Indicators)",
+        "Kitchen Equipment Planner (Table with Status Dots)"
+      ]
+    },
+    "ops_launchpad": {
+      "title": "Ops Launchpad",
+      "layout": "Dashboard Grid",
+      "features": [
+        "Hiring Pipeline (Applications, Interviews, Onboarding)",
+        "Menu Engineering (Cost Calculator)",
+        "Supply Chain (Vendor Cards)"
+      ]
+    },
+    "expansion_toolkit": {
+      "title": "Expansion Toolkit",
+      "layout": "Standard Grid",
+      "features": [
+        "Multi-Unit Dashboard (Revenue, Active Units)",
+        "Franchise Readiness Score (Donut Chart + Metrics)",
+        "Unit Replication Checklist"
+      ]
+    },
+    "lease_negotiation": {
+      "title": "Lease Negotiation",
+      "layout": "Single Column / List heavy",
+      "features": [
+        "Negotiation Phase Progress",
+        "Restaurant Lease Checklist (Detailed list with status badges)"
+      ]
+    }
+  },
+  "assets": {
+    "images": [
+      {
+        "category": "hero_background",
+        "url": "https://images.unsplash.com/photo-1745549670488-6852ef218009",
+        "description": "Dimly lit luxury restaurant interior for backgrounds"
+      },
+      {
+        "category": "chef_avatar",
+        "url": "https://images.unsplash.com/photo-1771508558305-11364b4069b6",
+        "description": "Chef plating food for hiring/team section"
+      },
+      {
+        "category": "floor_plan",
+        "url": "https://images.unsplash.com/photo-1673197743194-e92cdeeee85a",
+        "description": "Architectural vibe for Ground Up module"
+      }
+    ],
+    "icons": {
+      "library": "lucide-react",
+      "preferred": ["LayoutDashboard", "Map", "Hammer", "Rocket", "TrendingUp", "FileText", "ChefHat", "Utensils", "HardHat"]
+    }
+  },
+  "instructions_to_main_agent": {
+    "setup": [
+      "Install necessary dependencies: `npm install leaflet react-leaflet recharts framer-motion lucide-react clsx tailwind-merge`",
+      "Update `tailwind.config.js` to include the custom colors (fire, gold, etc.) in `theme.extend.colors`.",
+      "Ensure `index.css` sets the default background to `#0f0f10`."
+    ],
+    "implementation_strategy": [
+      "Create a layout wrapper `DashboardLayout` that handles the sidebar/tabs and the main content area.",
+      "Implement each module as a separate component in `src/pages/modules/`.",
+      "Use `shadcn` components as the base but override styles using `className` to match the `design_system` colors.",
+      "For the Map, use `react-leaflet` or a placeholder iframe if API keys are missing, styled with a dark filter.",
+      "Ensure all text has sufficient contrast against the dark background (use zinc-400 for secondary text)."
+    ],
+    "universal_guidelines": [
+      "Do NOT use gradients for main backgrounds, only for accents.",
+      "Use 1px borders with low opacity (`border-white/10`) for separation.",
+      "Ensure all interactive elements have `data-testid` attributes."
+    ]
+  },
+  "universal_guidelines_for_main_agent": [
+      "You tend to converge toward generic, 'on distribution' outputs. In frontend design, this creates what users call the 'AI slop' aesthetic. Avoid this: make creative, distinctive frontends that surprise and delight.",
+      "Dark colors look good when used independently without gradients. DO NOT use dark colors as gradients",
+      "Don't make generic centered layouts, simplistic gradients, and uniform styling.",
+      "Create depth through layered design elements with z-index hierarchy",
+      "Use glass-morphism effects with backdrop filters (12-24px blur)",
+      "You MUST NOT apply universal transition. Eg: `transition: all`. This results in breaking transforms. Always add transitions for specific interactive elements like button, input excluding transforms",
+      "You MUST NOT center align the app container, ie do not add `.App { text-align: center; }` in the css file. This disrupts the human natural reading flow of text",
+      "Always use modern button styles like pill-shaped, or sharp button with interaction animations & color relevant to the app style",
+      "NEVER: use AI assistant Emoji characters like 🤖🧠 etc for icons.",
+      "Every interaction needs micro-animations - hover states, transitions, parallax effects, and entrance animations. Static = dead.",
+      "Use 2-3x more spacing than feels comfortable. Cramped designs look cheap.",
+      "Subtle grain textures, noise overlays, custom cursors, selection states, and loading animations: separates good from extraordinary.",
+      "Main agent relies on these image URLs. Missing categories (especially sponsor logos) = main agent will use placeholder text which is FORBIDDEN",
+      "Prioritize using pre-existing components from src/components/ui when applicable",
+      "Create new components that match the style and conventions of existing components when needed",
+      "Examine existing components to understand the project's component patterns before creating new ones",
+      "Components MUST use named exports (export const ComponentName = ...)",
+      "Pages MUST use default exports (export default function PageName() {...})",
+      "Use `sonner` for toasts"
+  ]
+}
