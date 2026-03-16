@@ -50,8 +50,8 @@ const Landing = () => {
             </div>
             
             <h1 className="text-5xl md:text-6xl lg:text-7xl font-heading font-bold text-zinc-100 leading-tight mb-6">
-              Build & Scale Your
-              <span className="block text-[#d4af37]">Restaurant Empire</span>
+              Build or Scale Your
+              <span className="block text-[#d4af37]">Business</span>
             </h1>
             
             <p className="text-lg text-zinc-400 max-w-xl mb-10 leading-relaxed">
