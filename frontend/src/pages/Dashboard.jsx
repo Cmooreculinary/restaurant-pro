@@ -1,17 +1,15 @@
 import { useState, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { toast } from "sonner";
 import { 
   ChefHat, LayoutDashboard, Map, Hammer, Rocket, TrendingUp, FileText,
-  Bell, Search, LogOut, Settings, User, Plus, ChevronRight, ChevronDown,
-  AlertTriangle, CheckCircle, Clock, ArrowUpRight, ArrowDownRight, X
+  Bell, Search, LogOut, Settings, User, Plus, ChevronDown, X, Database
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -33,40 +31,36 @@ const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
 const Dashboard = ({ user, setUser }) => {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("command");
-  const [projects, setProjects] = useState([]);
-  const [activeProject, setActiveProject] = useState(null);
+  const [profile, setProfile] = useState(null);
+  const [summary, setSummary] = useState(null);
   const [notifications, setNotifications] = useState([]);
   const [showNotifications, setShowNotifications] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [loading, setLoading] = useState(true);
 
-  // Fetch projects
-  const fetchProjects = useCallback(async () => {
+  // Fetch profile and summary data
+  const fetchData = useCallback(async () => {
     try {
-      const response = await axios.get(`${API}/projects`);
-      setProjects(response.data);
-      if (response.data.length > 0 && !activeProject) {
-        setActiveProject(response.data[0]);
-      }
+      const [profileRes, summaryRes, notificationsRes] = await Promise.all([
+        axios.get(`${API}/profile`),
+        axios.get(`${API}/profile/summary`),
+        axios.get(`${API}/notifications`)
+      ]);
+      setProfile(profileRes.data);
+      setSummary(summaryRes.data);
+      setNotifications(notificationsRes.data);
     } catch (error) {
-      console.error("Error fetching projects:", error);
-    }
-  }, [activeProject]);
-
-  // Fetch notifications
-  const fetchNotifications = useCallback(async () => {
-    try {
-      const response = await axios.get(`${API}/notifications`);
-      setNotifications(response.data);
-    } catch (error) {
-      console.error("Error fetching notifications:", error);
+      console.error("Error fetching data:", error);
+    } finally {
+      setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    fetchProjects();
-    fetchNotifications();
-  }, [fetchProjects, fetchNotifications]);
+    fetchData();
+  }, [fetchData]);
 
   // Handle logout
   const handleLogout = async () => {
@@ -100,6 +94,23 @@ const Dashboard = ({ user, setUser }) => {
     { id: "lease", icon: FileText, label: "Lease Negotiation" },
   ];
 
+  // Get restaurant name from profile
+  const restaurantName = profile?.concept?.restaurant_name || "Your Restaurant";
+  const location = profile?.location?.city && profile?.location?.state 
+    ? `${profile.location.city}, ${profile.location.state}` 
+    : "";
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#0f0f10] flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-10 h-10 border-2 border-[#d4af37] border-t-transparent rounded-full animate-spin" />
+          <p className="text-zinc-400 text-sm">Loading dashboard...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#0f0f10]">
       {/* Top Navigation */}
@@ -111,9 +122,14 @@ const Dashboard = ({ user, setUser }) => {
               <div className="w-9 h-9 rounded-lg bg-[#d4af37] flex items-center justify-center">
                 <ChefHat className="w-5 h-5 text-zinc-900" />
               </div>
-              <span className="text-lg font-heading font-bold text-zinc-100 hidden md:block">
-                Restaurateur Pro
-              </span>
+              <div className="hidden md:block">
+                <span className="text-lg font-heading font-bold text-zinc-100">
+                  Restaurateur Pro
+                </span>
+                {restaurantName && restaurantName !== "Your Restaurant" && (
+                  <p className="text-xs text-zinc-500">{restaurantName}</p>
+                )}
+              </div>
             </div>
 
             {/* Module Tabs */}
@@ -149,6 +165,18 @@ const Dashboard = ({ user, setUser }) => {
                 className="w-64 pl-9 bg-zinc-900 border-zinc-800 text-zinc-100 placeholder:text-zinc-500 focus:border-zinc-700"
               />
             </div>
+
+            {/* Business Profile Quick Access */}
+            <Button
+              data-testid="profile-btn"
+              variant="ghost"
+              size="icon"
+              onClick={() => navigate('/profile')}
+              className="text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800"
+              title="Business Profile"
+            >
+              <Database className="w-5 h-5" />
+            </Button>
 
             {/* Notifications */}
             <div className="relative">
@@ -232,13 +260,23 @@ const Dashboard = ({ user, setUser }) => {
                   <p className="text-sm font-medium text-zinc-100">{user?.name}</p>
                   <p className="text-xs text-zinc-500">{user?.email}</p>
                 </div>
-                <DropdownMenuItem className="text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800 cursor-pointer">
-                  <User className="w-4 h-4 mr-2" />
-                  Profile
+                <DropdownMenuItem 
+                  onClick={() => navigate('/profile')}
+                  className="text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800 cursor-pointer"
+                >
+                  <Database className="w-4 h-4 mr-2" />
+                  Business Profile
                 </DropdownMenuItem>
                 <DropdownMenuItem className="text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800 cursor-pointer">
+                  <User className="w-4 h-4 mr-2" />
+                  Account Settings
+                </DropdownMenuItem>
+                <DropdownMenuItem 
+                  onClick={() => navigate('/pricing')}
+                  className="text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800 cursor-pointer"
+                >
                   <Settings className="w-4 h-4 mr-2" />
-                  Settings
+                  Subscription
                 </DropdownMenuItem>
                 <DropdownMenuSeparator className="bg-zinc-800" />
                 <DropdownMenuItem
@@ -278,25 +316,25 @@ const Dashboard = ({ user, setUser }) => {
 
       {/* Main Content */}
       <main className="p-6">
-        {activeProject ? (
+        {profile ? (
           <>
             {activeTab === "command" && (
-              <CommandCenter project={activeProject} onProjectUpdate={fetchProjects} />
+              <CommandCenter profile={profile} summary={summary} onRefresh={fetchData} />
             )}
             {activeTab === "site" && (
-              <SiteStrategist project={activeProject} />
+              <SiteStrategist profile={profile} />
             )}
             {activeTab === "ground" && (
-              <GroundUp project={activeProject} />
+              <GroundUp profile={profile} />
             )}
             {activeTab === "ops" && (
-              <OpsLaunchpad project={activeProject} />
+              <OpsLaunchpad profile={profile} />
             )}
             {activeTab === "expansion" && (
-              <ExpansionToolkit />
+              <ExpansionToolkit profile={profile} />
             )}
             {activeTab === "lease" && (
-              <LeaseNegotiation project={activeProject} />
+              <LeaseNegotiation profile={profile} />
             )}
           </>
         ) : (
@@ -305,15 +343,16 @@ const Dashboard = ({ user, setUser }) => {
               <ChefHat className="w-8 h-8 text-zinc-500" />
             </div>
             <h2 className="text-xl font-heading font-semibold text-zinc-100 mb-2">
-              No Projects Yet
+              Welcome to Restaurateur Pro
             </h2>
-            <p className="text-zinc-500 mb-6">Create your first restaurant project to get started</p>
+            <p className="text-zinc-500 mb-6">Complete your business profile to get started</p>
             <Button
-              data-testid="create-first-project-btn"
+              data-testid="setup-profile-btn"
+              onClick={() => navigate('/onboarding')}
               className="bg-[#d4af37] text-zinc-900 hover:bg-[#c4a030]"
             >
               <Plus className="w-4 h-4 mr-2" />
-              Create Project
+              Setup Business Profile
             </Button>
           </div>
         )}

@@ -7,7 +7,7 @@ import os
 import logging
 from pathlib import Path
 from pydantic import BaseModel, Field
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 import uuid
 from datetime import datetime, timezone, timedelta
 import httpx
@@ -20,40 +20,119 @@ mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
-app = FastAPI()
+app = FastAPI(title="Restaurateur Pro API")
 api_router = APIRouter(prefix="/api")
 
-# ==================== MODELS ====================
+# ==================== BUSINESS PROFILE MODELS ====================
+
+class ConceptBasics(BaseModel):
+    restaurant_name: str = ""
+    concept_type: str = ""  # fine_dining, casual, fast_casual, qsr, cafe, bar
+    cuisine_types: List[str] = []
+    tagline: str = ""
+    description: str = ""
+    unique_selling_points: List[str] = []
+
+class LocationInfo(BaseModel):
+    address: str = ""
+    city: str = ""
+    state: str = ""
+    zip_code: str = ""
+    country: str = "USA"
+    coordinates: Dict[str, float] = {"lat": 0, "lng": 0}
+    square_footage: int = 0
+    seating_capacity: int = 0
+    has_patio: bool = False
+    patio_seats: int = 0
+    parking_spaces: int = 0
+
+class FinancialInfo(BaseModel):
+    total_budget: float = 0
+    construction_budget: float = 0
+    equipment_budget: float = 0
+    working_capital: float = 0
+    funding_sources: List[str] = []
+    target_revenue_monthly: float = 0
+    target_food_cost_percent: float = 30
+    target_labor_cost_percent: float = 30
+
+class OperationalInfo(BaseModel):
+    target_open_date: str = ""
+    operating_hours: Dict[str, Dict[str, str]] = {}
+    service_types: List[str] = []  # dine_in, takeout, delivery, catering
+    pos_system: str = ""
+    reservation_system: str = ""
+    delivery_partners: List[str] = []
+
+class MenuInfo(BaseModel):
+    price_range: str = ""  # $, $$, $$$, $$$$
+    signature_dishes: List[Dict[str, Any]] = []
+    dietary_options: List[str] = []  # vegetarian, vegan, gluten_free, etc.
+    beverage_program: str = ""  # full_bar, beer_wine, non_alcoholic
+
+class TeamInfo(BaseModel):
+    owner_name: str = ""
+    owner_experience: str = ""
+    key_positions_needed: List[str] = []
+    total_staff_needed: int = 0
+    management_structure: str = ""
+
+class BrandingInfo(BaseModel):
+    brand_colors: List[str] = []
+    brand_voice: str = ""  # formal, casual, playful, sophisticated
+    target_demographic: str = ""
+    target_age_range: str = ""
+    social_media_handles: Dict[str, str] = {}
+    website_url: str = ""
+
+class BusinessProfile(BaseModel):
+    profile_id: str = Field(default_factory=lambda: f"bp_{uuid.uuid4().hex[:12]}")
+    user_id: str
+    concept: ConceptBasics = Field(default_factory=ConceptBasics)
+    location: LocationInfo = Field(default_factory=LocationInfo)
+    financial: FinancialInfo = Field(default_factory=FinancialInfo)
+    operational: OperationalInfo = Field(default_factory=OperationalInfo)
+    menu: MenuInfo = Field(default_factory=MenuInfo)
+    team: TeamInfo = Field(default_factory=TeamInfo)
+    branding: BrandingInfo = Field(default_factory=BrandingInfo)
+    onboarding_completed: bool = False
+    onboarding_step: int = 0
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class BusinessProfileUpdate(BaseModel):
+    section: str
+    data: Dict[str, Any]
+
+# ==================== USER MODELS ====================
 
 class User(BaseModel):
     user_id: str
     email: str
     name: str
     picture: Optional[str] = None
+    onboarding_completed: bool = False
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+# ==================== PROJECT MODELS ====================
 
 class Project(BaseModel):
     project_id: str = Field(default_factory=lambda: f"proj_{uuid.uuid4().hex[:12]}")
     user_id: str
+    profile_id: str  # Links to BusinessProfile
     name: str
-    location: str
     phase: str = "concept"
     completion: int = 0
-    budget_total: float = 0
-    budget_invested: float = 0
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-
-class ProjectCreate(BaseModel):
-    name: str
-    location: str
-    budget_total: float = 0
 
 class Task(BaseModel):
     task_id: str = Field(default_factory=lambda: f"TSK-{uuid.uuid4().hex[:8].upper()}")
     project_id: str
     user_id: str
     title: str
-    status: str = "pending"  # pending, active, urgent, completed
+    description: str = ""
+    status: str = "pending"
+    priority: str = "medium"
     due_date: Optional[str] = None
     category: str = "general"
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
@@ -61,120 +140,206 @@ class Task(BaseModel):
 class TaskCreate(BaseModel):
     project_id: str
     title: str
+    description: str = ""
     status: str = "pending"
+    priority: str = "medium"
     due_date: Optional[str] = None
     category: str = "general"
 
+class TaskUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    status: Optional[str] = None
+    priority: Optional[str] = None
+    due_date: Optional[str] = None
+    category: Optional[str] = None
+
 class TeamMember(BaseModel):
     member_id: str = Field(default_factory=lambda: f"mem_{uuid.uuid4().hex[:8]}")
-    project_id: str
+    profile_id: str
     user_id: str
     name: str
     role: str
+    email: str = ""
+    phone: str = ""
     avatar_color: str = "purple"
     status: str = "active"
+    hire_date: Optional[str] = None
+    notes: str = ""
 
 class TeamMemberCreate(BaseModel):
-    project_id: str
     name: str
     role: str
+    email: str = ""
+    phone: str = ""
     avatar_color: str = "purple"
+    hire_date: Optional[str] = None
+    notes: str = ""
 
 class BudgetItem(BaseModel):
     budget_id: str = Field(default_factory=lambda: f"bgt_{uuid.uuid4().hex[:8]}")
-    project_id: str
+    profile_id: str
     user_id: str
     category: str
+    subcategory: str = ""
     planned: float
     spent: float = 0
+    notes: str = ""
+
+class BudgetItemCreate(BaseModel):
+    category: str
+    subcategory: str = ""
+    planned: float
+    spent: float = 0
+    notes: str = ""
 
 class Equipment(BaseModel):
     equipment_id: str = Field(default_factory=lambda: f"EQ-{uuid.uuid4().hex[:6].upper()}")
-    project_id: str
+    profile_id: str
     user_id: str
     name: str
+    category: str = ""
     specs: str
-    status: str = "pending"  # pending, ordered, delivered, installed
+    vendor: str = ""
+    cost: float = 0
+    status: str = "pending"
+    notes: str = ""
 
 class EquipmentCreate(BaseModel):
-    project_id: str
     name: str
+    category: str = ""
     specs: str
+    vendor: str = ""
+    cost: float = 0
     status: str = "pending"
+    notes: str = ""
 
 class Permit(BaseModel):
     permit_id: str = Field(default_factory=lambda: f"pmt_{uuid.uuid4().hex[:8]}")
-    project_id: str
+    profile_id: str
     user_id: str
     name: str
-    status: str = "pending"  # pending, submitted, approved, rejected
+    issuing_authority: str = ""
+    status: str = "pending"
     submitted_date: Optional[str] = None
+    approved_date: Optional[str] = None
+    expiry_date: Optional[str] = None
+    cost: float = 0
+    notes: str = ""
 
-class HiringCandidate(BaseModel):
-    candidate_id: str = Field(default_factory=lambda: f"cnd_{uuid.uuid4().hex[:8]}")
-    project_id: str
-    user_id: str
+class PermitCreate(BaseModel):
     name: str
-    position: str
-    stage: str = "application"  # application, interview, onboarding, hired
-    email: Optional[str] = None
-
-class HiringCandidateCreate(BaseModel):
-    project_id: str
-    name: str
-    position: str
-    stage: str = "application"
-    email: Optional[str] = None
+    issuing_authority: str = ""
+    status: str = "pending"
+    submitted_date: Optional[str] = None
+    cost: float = 0
+    notes: str = ""
 
 class Vendor(BaseModel):
     vendor_id: str = Field(default_factory=lambda: f"vnd_{uuid.uuid4().hex[:8]}")
-    project_id: str
+    profile_id: str
     user_id: str
     name: str
     category: str
+    contact_name: str = ""
+    email: str = ""
+    phone: str = ""
+    address: str = ""
+    payment_terms: str = ""
     status: str = "active"
-    delivery_status: str = "on_time"  # on_time, delayed, pending
+    notes: str = ""
+
+class VendorCreate(BaseModel):
+    name: str
+    category: str
+    contact_name: str = ""
+    email: str = ""
+    phone: str = ""
+    address: str = ""
+    payment_terms: str = ""
+    notes: str = ""
 
 class MenuItem(BaseModel):
     menu_item_id: str = Field(default_factory=lambda: f"mnu_{uuid.uuid4().hex[:8]}")
-    project_id: str
+    profile_id: str
     user_id: str
     name: str
+    description: str = ""
+    category: str
     cost: float
     price: float
+    dietary_tags: List[str] = []
+    is_signature: bool = False
+    is_active: bool = True
+
+class MenuItemCreate(BaseModel):
+    name: str
+    description: str = ""
     category: str
+    cost: float
+    price: float
+    dietary_tags: List[str] = []
+    is_signature: bool = False
 
 class LeaseClause(BaseModel):
     clause_id: str = Field(default_factory=lambda: f"cls_{uuid.uuid4().hex[:8]}")
-    project_id: str
+    profile_id: str
     user_id: str
     title: str
-    status: str = "reviewing"  # accepted, reviewing, counter_offered, attention
-    notes: Optional[str] = None
+    original_text: str = ""
+    proposed_text: str = ""
+    status: str = "reviewing"
+    priority: str = "medium"
+    notes: str = ""
+
+class HiringCandidate(BaseModel):
+    candidate_id: str = Field(default_factory=lambda: f"cnd_{uuid.uuid4().hex[:8]}")
+    profile_id: str
+    user_id: str
+    name: str
+    position: str
+    email: str = ""
+    phone: str = ""
+    stage: str = "application"
+    resume_notes: str = ""
+    interview_notes: str = ""
+    salary_expectation: float = 0
+    start_date: Optional[str] = None
+
+class HiringCandidateCreate(BaseModel):
+    name: str
+    position: str
+    email: str = ""
+    phone: str = ""
+    stage: str = "application"
+    resume_notes: str = ""
+    salary_expectation: float = 0
 
 class Unit(BaseModel):
     unit_id: str = Field(default_factory=lambda: f"unit_{uuid.uuid4().hex[:8]}")
     user_id: str
+    profile_id: str
     name: str
     location: str
     status: str = "active"
     monthly_revenue: float = 0
-
-class AIAnalysisRequest(BaseModel):
-    project_id: str
-    analysis_type: str  # lease, menu, cost, site
-    content: str
+    open_date: Optional[str] = None
 
 class Notification(BaseModel):
     notification_id: str = Field(default_factory=lambda: f"ntf_{uuid.uuid4().hex[:8]}")
     user_id: str
     title: str
     message: str
-    type: str = "info"  # info, warning, success, error
+    type: str = "info"
     read: bool = False
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
-# ==================== AUTH ENDPOINTS ====================
+class AIAnalysisRequest(BaseModel):
+    analysis_type: str
+    content: str
+    context: Optional[Dict[str, Any]] = None
+
+# ==================== AUTH HELPERS ====================
 
 async def get_current_user(request: Request) -> User:
     """Extract and validate user from session token"""
@@ -205,6 +370,21 @@ async def get_current_user(request: Request) -> User:
     
     return User(**user)
 
+async def get_user_profile(user: User) -> dict:
+    """Get or create user's business profile"""
+    profile = await db.business_profiles.find_one({"user_id": user.user_id}, {"_id": 0})
+    if not profile:
+        new_profile = BusinessProfile(user_id=user.user_id)
+        doc = new_profile.model_dump()
+        doc["created_at"] = doc["created_at"].isoformat()
+        doc["updated_at"] = doc["updated_at"].isoformat()
+        await db.business_profiles.insert_one(doc)
+        profile = doc
+        profile.pop("_id", None)
+    return profile
+
+# ==================== AUTH ENDPOINTS ====================
+
 @api_router.post("/auth/session")
 async def exchange_session(request: Request, response: Response):
     """Exchange session_id from Emergent Auth for a session token"""
@@ -214,7 +394,6 @@ async def exchange_session(request: Request, response: Response):
     if not session_id:
         raise HTTPException(status_code=400, detail="session_id required")
     
-    # Call Emergent Auth to get user data
     async with httpx.AsyncClient() as client_http:
         resp = await client_http.get(
             "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data",
@@ -229,36 +408,27 @@ async def exchange_session(request: Request, response: Response):
     user_id = f"user_{uuid.uuid4().hex[:12]}"
     email = auth_data.get("email")
     
-    # Check if user exists
     existing_user = await db.users.find_one({"email": email}, {"_id": 0})
     if existing_user:
         user_id = existing_user["user_id"]
     else:
-        # Create new user
         new_user = {
             "user_id": user_id,
             "email": email,
             "name": auth_data.get("name", "User"),
             "picture": auth_data.get("picture"),
+            "onboarding_completed": False,
             "created_at": datetime.now(timezone.utc).isoformat()
         }
         await db.users.insert_one(new_user)
         
-        # Create default project for new user
-        default_project = {
-            "project_id": f"proj_{uuid.uuid4().hex[:12]}",
-            "user_id": user_id,
-            "name": "My First Restaurant",
-            "location": "New York, NY",
-            "phase": "concept",
-            "completion": 15,
-            "budget_total": 500000,
-            "budget_invested": 75000,
-            "created_at": datetime.now(timezone.utc).isoformat()
-        }
-        await db.projects.insert_one(default_project)
+        # Create business profile for new user
+        new_profile = BusinessProfile(user_id=user_id)
+        profile_doc = new_profile.model_dump()
+        profile_doc["created_at"] = profile_doc["created_at"].isoformat()
+        profile_doc["updated_at"] = profile_doc["updated_at"].isoformat()
+        await db.business_profiles.insert_one(profile_doc)
     
-    # Create session
     session_token = auth_data.get("session_token", f"sess_{uuid.uuid4().hex}")
     expires_at = datetime.now(timezone.utc) + timedelta(days=7)
     
@@ -286,8 +456,14 @@ async def exchange_session(request: Request, response: Response):
 
 @api_router.get("/auth/me")
 async def get_me(user: User = Depends(get_current_user)):
-    """Get current authenticated user"""
-    return user.model_dump()
+    """Get current authenticated user with profile status"""
+    profile = await get_user_profile(user)
+    return {
+        **user.model_dump(),
+        "profile_id": profile.get("profile_id"),
+        "onboarding_completed": profile.get("onboarding_completed", False),
+        "onboarding_step": profile.get("onboarding_step", 0)
+    }
 
 @api_router.post("/auth/logout")
 async def logout(request: Request, response: Response):
@@ -299,55 +475,453 @@ async def logout(request: Request, response: Response):
     response.delete_cookie(key="session_token", path="/")
     return {"message": "Logged out"}
 
-# ==================== PROJECTS ====================
+# ==================== BUSINESS PROFILE ENDPOINTS ====================
 
-@api_router.get("/projects", response_model=List[dict])
-async def get_projects(user: User = Depends(get_current_user)):
-    projects = await db.projects.find({"user_id": user.user_id}, {"_id": 0}).to_list(100)
-    return projects
+@api_router.get("/profile")
+async def get_profile(user: User = Depends(get_current_user)):
+    """Get user's complete business profile"""
+    profile = await get_user_profile(user)
+    return profile
 
-@api_router.post("/projects")
-async def create_project(data: ProjectCreate, user: User = Depends(get_current_user)):
-    project = Project(
-        user_id=user.user_id,
-        name=data.name,
-        location=data.location,
-        budget_total=data.budget_total
+@api_router.put("/profile")
+async def update_profile(data: BusinessProfileUpdate, user: User = Depends(get_current_user)):
+    """Update a section of the business profile"""
+    profile = await get_user_profile(user)
+    
+    valid_sections = ["concept", "location", "financial", "operational", "menu", "team", "branding"]
+    if data.section not in valid_sections:
+        raise HTTPException(status_code=400, detail=f"Invalid section. Must be one of: {valid_sections}")
+    
+    update_data = {
+        f"{data.section}": data.data,
+        "updated_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    await db.business_profiles.update_one(
+        {"profile_id": profile["profile_id"]},
+        {"$set": update_data}
     )
-    doc = project.model_dump()
-    doc["created_at"] = doc["created_at"].isoformat()
-    await db.projects.insert_one(doc)
+    
+    updated_profile = await db.business_profiles.find_one({"profile_id": profile["profile_id"]}, {"_id": 0})
+    return updated_profile
+
+@api_router.put("/profile/onboarding-step")
+async def update_onboarding_step(data: dict, user: User = Depends(get_current_user)):
+    """Update onboarding progress"""
+    profile = await get_user_profile(user)
+    
+    step = data.get("step", 0)
+    completed = data.get("completed", False)
+    
+    update_data = {
+        "onboarding_step": step,
+        "onboarding_completed": completed,
+        "updated_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    await db.business_profiles.update_one(
+        {"profile_id": profile["profile_id"]},
+        {"$set": update_data}
+    )
+    
+    if completed:
+        await db.users.update_one(
+            {"user_id": user.user_id},
+            {"$set": {"onboarding_completed": True}}
+        )
+    
+    return {"step": step, "completed": completed}
+
+@api_router.get("/profile/summary")
+async def get_profile_summary(user: User = Depends(get_current_user)):
+    """Get a summary of key business data for dashboards"""
+    profile = await get_user_profile(user)
+    
+    # Get counts
+    team_count = await db.team_members.count_documents({"profile_id": profile["profile_id"]})
+    menu_count = await db.menu_items.count_documents({"profile_id": profile["profile_id"]})
+    vendor_count = await db.vendors.count_documents({"profile_id": profile["profile_id"]})
+    equipment_count = await db.equipment.count_documents({"profile_id": profile["profile_id"]})
+    permit_count = await db.permits.count_documents({"profile_id": profile["profile_id"]})
+    
+    # Calculate budget totals
+    budget_items = await db.budget_items.find({"profile_id": profile["profile_id"]}, {"_id": 0}).to_list(100)
+    total_planned = sum(item.get("planned", 0) for item in budget_items)
+    total_spent = sum(item.get("spent", 0) for item in budget_items)
+    
+    return {
+        "profile_id": profile["profile_id"],
+        "restaurant_name": profile.get("concept", {}).get("restaurant_name", ""),
+        "concept_type": profile.get("concept", {}).get("concept_type", ""),
+        "location": f"{profile.get('location', {}).get('city', '')}, {profile.get('location', {}).get('state', '')}",
+        "address": profile.get("location", {}).get("address", ""),
+        "total_budget": profile.get("financial", {}).get("total_budget", 0),
+        "budget_spent": total_spent,
+        "budget_planned": total_planned,
+        "team_count": team_count,
+        "menu_count": menu_count,
+        "vendor_count": vendor_count,
+        "equipment_count": equipment_count,
+        "permit_count": permit_count,
+        "target_open_date": profile.get("operational", {}).get("target_open_date", ""),
+        "onboarding_completed": profile.get("onboarding_completed", False)
+    }
+
+# ==================== TEAM ENDPOINTS ====================
+
+@api_router.get("/team")
+async def get_team(user: User = Depends(get_current_user)):
+    """Get all team members"""
+    profile = await get_user_profile(user)
+    members = await db.team_members.find({"profile_id": profile["profile_id"]}, {"_id": 0}).to_list(100)
+    return members
+
+@api_router.post("/team")
+async def add_team_member(data: TeamMemberCreate, user: User = Depends(get_current_user)):
+    """Add a new team member"""
+    profile = await get_user_profile(user)
+    member = TeamMember(
+        profile_id=profile["profile_id"],
+        user_id=user.user_id,
+        **data.model_dump()
+    )
+    doc = member.model_dump()
+    await db.team_members.insert_one(doc)
     doc.pop("_id", None)
     return doc
 
-@api_router.put("/projects/{project_id}")
-async def update_project(project_id: str, data: dict, user: User = Depends(get_current_user)):
+@api_router.put("/team/{member_id}")
+async def update_team_member(member_id: str, data: dict, user: User = Depends(get_current_user)):
+    """Update a team member"""
     data.pop("_id", None)
+    data.pop("member_id", None)
+    data.pop("profile_id", None)
     data.pop("user_id", None)
-    await db.projects.update_one(
-        {"project_id": project_id, "user_id": user.user_id},
+    
+    await db.team_members.update_one(
+        {"member_id": member_id, "user_id": user.user_id},
         {"$set": data}
     )
-    project = await db.projects.find_one({"project_id": project_id}, {"_id": 0})
-    return project
+    member = await db.team_members.find_one({"member_id": member_id}, {"_id": 0})
+    return member
 
-# ==================== TASKS ====================
+@api_router.delete("/team/{member_id}")
+async def delete_team_member(member_id: str, user: User = Depends(get_current_user)):
+    """Delete a team member"""
+    await db.team_members.delete_one({"member_id": member_id, "user_id": user.user_id})
+    return {"message": "Deleted"}
+
+# ==================== BUDGET ENDPOINTS ====================
+
+@api_router.get("/budget")
+async def get_budget(user: User = Depends(get_current_user)):
+    """Get all budget items"""
+    profile = await get_user_profile(user)
+    items = await db.budget_items.find({"profile_id": profile["profile_id"]}, {"_id": 0}).to_list(100)
+    return items
+
+@api_router.post("/budget")
+async def create_budget_item(data: BudgetItemCreate, user: User = Depends(get_current_user)):
+    """Create a new budget item"""
+    profile = await get_user_profile(user)
+    item = BudgetItem(
+        profile_id=profile["profile_id"],
+        user_id=user.user_id,
+        **data.model_dump()
+    )
+    doc = item.model_dump()
+    await db.budget_items.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+@api_router.put("/budget/{budget_id}")
+async def update_budget_item(budget_id: str, data: dict, user: User = Depends(get_current_user)):
+    """Update a budget item"""
+    data.pop("_id", None)
+    data.pop("budget_id", None)
+    await db.budget_items.update_one(
+        {"budget_id": budget_id, "user_id": user.user_id},
+        {"$set": data}
+    )
+    item = await db.budget_items.find_one({"budget_id": budget_id}, {"_id": 0})
+    return item
+
+@api_router.delete("/budget/{budget_id}")
+async def delete_budget_item(budget_id: str, user: User = Depends(get_current_user)):
+    """Delete a budget item"""
+    await db.budget_items.delete_one({"budget_id": budget_id, "user_id": user.user_id})
+    return {"message": "Deleted"}
+
+# ==================== EQUIPMENT ENDPOINTS ====================
+
+@api_router.get("/equipment")
+async def get_equipment(user: User = Depends(get_current_user)):
+    """Get all equipment"""
+    profile = await get_user_profile(user)
+    items = await db.equipment.find({"profile_id": profile["profile_id"]}, {"_id": 0}).to_list(100)
+    return items
+
+@api_router.post("/equipment")
+async def add_equipment(data: EquipmentCreate, user: User = Depends(get_current_user)):
+    """Add new equipment"""
+    profile = await get_user_profile(user)
+    equipment = Equipment(
+        profile_id=profile["profile_id"],
+        user_id=user.user_id,
+        **data.model_dump()
+    )
+    doc = equipment.model_dump()
+    await db.equipment.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+@api_router.put("/equipment/{equipment_id}")
+async def update_equipment(equipment_id: str, data: dict, user: User = Depends(get_current_user)):
+    """Update equipment"""
+    data.pop("_id", None)
+    data.pop("equipment_id", None)
+    await db.equipment.update_one(
+        {"equipment_id": equipment_id, "user_id": user.user_id},
+        {"$set": data}
+    )
+    item = await db.equipment.find_one({"equipment_id": equipment_id}, {"_id": 0})
+    return item
+
+@api_router.delete("/equipment/{equipment_id}")
+async def delete_equipment(equipment_id: str, user: User = Depends(get_current_user)):
+    """Delete equipment"""
+    await db.equipment.delete_one({"equipment_id": equipment_id, "user_id": user.user_id})
+    return {"message": "Deleted"}
+
+# ==================== PERMITS ENDPOINTS ====================
+
+@api_router.get("/permits")
+async def get_permits(user: User = Depends(get_current_user)):
+    """Get all permits"""
+    profile = await get_user_profile(user)
+    permits = await db.permits.find({"profile_id": profile["profile_id"]}, {"_id": 0}).to_list(100)
+    return permits
+
+@api_router.post("/permits")
+async def add_permit(data: PermitCreate, user: User = Depends(get_current_user)):
+    """Add a new permit"""
+    profile = await get_user_profile(user)
+    permit = Permit(
+        profile_id=profile["profile_id"],
+        user_id=user.user_id,
+        **data.model_dump()
+    )
+    doc = permit.model_dump()
+    await db.permits.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+@api_router.put("/permits/{permit_id}")
+async def update_permit(permit_id: str, data: dict, user: User = Depends(get_current_user)):
+    """Update a permit"""
+    data.pop("_id", None)
+    data.pop("permit_id", None)
+    await db.permits.update_one(
+        {"permit_id": permit_id, "user_id": user.user_id},
+        {"$set": data}
+    )
+    permit = await db.permits.find_one({"permit_id": permit_id}, {"_id": 0})
+    return permit
+
+@api_router.delete("/permits/{permit_id}")
+async def delete_permit(permit_id: str, user: User = Depends(get_current_user)):
+    """Delete a permit"""
+    await db.permits.delete_one({"permit_id": permit_id, "user_id": user.user_id})
+    return {"message": "Deleted"}
+
+# ==================== VENDORS ENDPOINTS ====================
+
+@api_router.get("/vendors")
+async def get_vendors(user: User = Depends(get_current_user)):
+    """Get all vendors"""
+    profile = await get_user_profile(user)
+    vendors = await db.vendors.find({"profile_id": profile["profile_id"]}, {"_id": 0}).to_list(100)
+    return vendors
+
+@api_router.post("/vendors")
+async def add_vendor(data: VendorCreate, user: User = Depends(get_current_user)):
+    """Add a new vendor"""
+    profile = await get_user_profile(user)
+    vendor = Vendor(
+        profile_id=profile["profile_id"],
+        user_id=user.user_id,
+        **data.model_dump()
+    )
+    doc = vendor.model_dump()
+    await db.vendors.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+@api_router.put("/vendors/{vendor_id}")
+async def update_vendor(vendor_id: str, data: dict, user: User = Depends(get_current_user)):
+    """Update a vendor"""
+    data.pop("_id", None)
+    data.pop("vendor_id", None)
+    await db.vendors.update_one(
+        {"vendor_id": vendor_id, "user_id": user.user_id},
+        {"$set": data}
+    )
+    vendor = await db.vendors.find_one({"vendor_id": vendor_id}, {"_id": 0})
+    return vendor
+
+@api_router.delete("/vendors/{vendor_id}")
+async def delete_vendor(vendor_id: str, user: User = Depends(get_current_user)):
+    """Delete a vendor"""
+    await db.vendors.delete_one({"vendor_id": vendor_id, "user_id": user.user_id})
+    return {"message": "Deleted"}
+
+# ==================== MENU ITEMS ENDPOINTS ====================
+
+@api_router.get("/menu-items")
+async def get_menu_items(user: User = Depends(get_current_user)):
+    """Get all menu items"""
+    profile = await get_user_profile(user)
+    items = await db.menu_items.find({"profile_id": profile["profile_id"]}, {"_id": 0}).to_list(200)
+    return items
+
+@api_router.post("/menu-items")
+async def add_menu_item(data: MenuItemCreate, user: User = Depends(get_current_user)):
+    """Add a new menu item"""
+    profile = await get_user_profile(user)
+    item = MenuItem(
+        profile_id=profile["profile_id"],
+        user_id=user.user_id,
+        **data.model_dump()
+    )
+    doc = item.model_dump()
+    await db.menu_items.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+@api_router.put("/menu-items/{menu_item_id}")
+async def update_menu_item(menu_item_id: str, data: dict, user: User = Depends(get_current_user)):
+    """Update a menu item"""
+    data.pop("_id", None)
+    data.pop("menu_item_id", None)
+    await db.menu_items.update_one(
+        {"menu_item_id": menu_item_id, "user_id": user.user_id},
+        {"$set": data}
+    )
+    item = await db.menu_items.find_one({"menu_item_id": menu_item_id}, {"_id": 0})
+    return item
+
+@api_router.delete("/menu-items/{menu_item_id}")
+async def delete_menu_item(menu_item_id: str, user: User = Depends(get_current_user)):
+    """Delete a menu item"""
+    await db.menu_items.delete_one({"menu_item_id": menu_item_id, "user_id": user.user_id})
+    return {"message": "Deleted"}
+
+# ==================== HIRING CANDIDATES ENDPOINTS ====================
+
+@api_router.get("/candidates")
+async def get_candidates(user: User = Depends(get_current_user)):
+    """Get all hiring candidates"""
+    profile = await get_user_profile(user)
+    candidates = await db.candidates.find({"profile_id": profile["profile_id"]}, {"_id": 0}).to_list(100)
+    return candidates
+
+@api_router.post("/candidates")
+async def add_candidate(data: HiringCandidateCreate, user: User = Depends(get_current_user)):
+    """Add a new candidate"""
+    profile = await get_user_profile(user)
+    candidate = HiringCandidate(
+        profile_id=profile["profile_id"],
+        user_id=user.user_id,
+        **data.model_dump()
+    )
+    doc = candidate.model_dump()
+    await db.candidates.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+@api_router.put("/candidates/{candidate_id}")
+async def update_candidate(candidate_id: str, data: dict, user: User = Depends(get_current_user)):
+    """Update a candidate"""
+    data.pop("_id", None)
+    data.pop("candidate_id", None)
+    await db.candidates.update_one(
+        {"candidate_id": candidate_id, "user_id": user.user_id},
+        {"$set": data}
+    )
+    candidate = await db.candidates.find_one({"candidate_id": candidate_id}, {"_id": 0})
+    return candidate
+
+@api_router.delete("/candidates/{candidate_id}")
+async def delete_candidate(candidate_id: str, user: User = Depends(get_current_user)):
+    """Delete a candidate"""
+    await db.candidates.delete_one({"candidate_id": candidate_id, "user_id": user.user_id})
+    return {"message": "Deleted"}
+
+# ==================== LEASE CLAUSES ENDPOINTS ====================
+
+@api_router.get("/lease-clauses")
+async def get_lease_clauses(user: User = Depends(get_current_user)):
+    """Get all lease clauses"""
+    profile = await get_user_profile(user)
+    clauses = await db.lease_clauses.find({"profile_id": profile["profile_id"]}, {"_id": 0}).to_list(100)
+    return clauses
+
+@api_router.post("/lease-clauses")
+async def add_lease_clause(data: dict, user: User = Depends(get_current_user)):
+    """Add a new lease clause"""
+    profile = await get_user_profile(user)
+    clause = LeaseClause(
+        profile_id=profile["profile_id"],
+        user_id=user.user_id,
+        title=data["title"],
+        original_text=data.get("original_text", ""),
+        proposed_text=data.get("proposed_text", ""),
+        status=data.get("status", "reviewing"),
+        priority=data.get("priority", "medium"),
+        notes=data.get("notes", "")
+    )
+    doc = clause.model_dump()
+    await db.lease_clauses.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+@api_router.put("/lease-clauses/{clause_id}")
+async def update_lease_clause(clause_id: str, data: dict, user: User = Depends(get_current_user)):
+    """Update a lease clause"""
+    data.pop("_id", None)
+    data.pop("clause_id", None)
+    await db.lease_clauses.update_one(
+        {"clause_id": clause_id, "user_id": user.user_id},
+        {"$set": data}
+    )
+    clause = await db.lease_clauses.find_one({"clause_id": clause_id}, {"_id": 0})
+    return clause
+
+@api_router.delete("/lease-clauses/{clause_id}")
+async def delete_lease_clause(clause_id: str, user: User = Depends(get_current_user)):
+    """Delete a lease clause"""
+    await db.lease_clauses.delete_one({"clause_id": clause_id, "user_id": user.user_id})
+    return {"message": "Deleted"}
+
+# ==================== TASKS ENDPOINTS ====================
 
 @api_router.get("/tasks")
-async def get_tasks(project_id: str, user: User = Depends(get_current_user)):
-    tasks = await db.tasks.find(
-        {"project_id": project_id, "user_id": user.user_id}, 
-        {"_id": 0}
-    ).to_list(100)
+async def get_tasks(user: User = Depends(get_current_user)):
+    """Get all tasks"""
+    profile = await get_user_profile(user)
+    tasks = await db.tasks.find({"user_id": user.user_id}, {"_id": 0}).to_list(200)
     return tasks
 
 @api_router.post("/tasks")
 async def create_task(data: TaskCreate, user: User = Depends(get_current_user)):
+    """Create a new task"""
     task = Task(
         project_id=data.project_id,
         user_id=user.user_id,
         title=data.title,
+        description=data.description,
         status=data.status,
+        priority=data.priority,
         due_date=data.due_date,
         category=data.category
     )
@@ -359,264 +933,71 @@ async def create_task(data: TaskCreate, user: User = Depends(get_current_user)):
 
 @api_router.put("/tasks/{task_id}")
 async def update_task(task_id: str, data: dict, user: User = Depends(get_current_user)):
+    """Update a task"""
     data.pop("_id", None)
+    data.pop("task_id", None)
     await db.tasks.update_one(
         {"task_id": task_id, "user_id": user.user_id},
         {"$set": data}
     )
-    return {"message": "Updated"}
+    task = await db.tasks.find_one({"task_id": task_id}, {"_id": 0})
+    return task
 
 @api_router.delete("/tasks/{task_id}")
 async def delete_task(task_id: str, user: User = Depends(get_current_user)):
+    """Delete a task"""
     await db.tasks.delete_one({"task_id": task_id, "user_id": user.user_id})
     return {"message": "Deleted"}
 
-# ==================== TEAM ====================
-
-@api_router.get("/team")
-async def get_team(project_id: str, user: User = Depends(get_current_user)):
-    members = await db.team_members.find(
-        {"project_id": project_id, "user_id": user.user_id},
-        {"_id": 0}
-    ).to_list(100)
-    return members
-
-@api_router.post("/team")
-async def add_team_member(data: TeamMemberCreate, user: User = Depends(get_current_user)):
-    member = TeamMember(
-        project_id=data.project_id,
-        user_id=user.user_id,
-        name=data.name,
-        role=data.role,
-        avatar_color=data.avatar_color
-    )
-    doc = member.model_dump()
-    await db.team_members.insert_one(doc)
-    doc.pop("_id", None)
-    return doc
-
-# ==================== BUDGET ====================
-
-@api_router.get("/budget")
-async def get_budget(project_id: str, user: User = Depends(get_current_user)):
-    items = await db.budget_items.find(
-        {"project_id": project_id, "user_id": user.user_id},
-        {"_id": 0}
-    ).to_list(100)
-    return items
-
-@api_router.post("/budget")
-async def create_budget_item(data: dict, user: User = Depends(get_current_user)):
-    item = BudgetItem(
-        project_id=data["project_id"],
-        user_id=user.user_id,
-        category=data["category"],
-        planned=data["planned"],
-        spent=data.get("spent", 0)
-    )
-    doc = item.model_dump()
-    await db.budget_items.insert_one(doc)
-    doc.pop("_id", None)
-    return doc
-
-# ==================== EQUIPMENT ====================
-
-@api_router.get("/equipment")
-async def get_equipment(project_id: str, user: User = Depends(get_current_user)):
-    items = await db.equipment.find(
-        {"project_id": project_id, "user_id": user.user_id},
-        {"_id": 0}
-    ).to_list(100)
-    return items
-
-@api_router.post("/equipment")
-async def add_equipment(data: EquipmentCreate, user: User = Depends(get_current_user)):
-    equipment = Equipment(
-        project_id=data.project_id,
-        user_id=user.user_id,
-        name=data.name,
-        specs=data.specs,
-        status=data.status
-    )
-    doc = equipment.model_dump()
-    await db.equipment.insert_one(doc)
-    doc.pop("_id", None)
-    return doc
-
-@api_router.put("/equipment/{equipment_id}")
-async def update_equipment(equipment_id: str, data: dict, user: User = Depends(get_current_user)):
-    data.pop("_id", None)
-    await db.equipment.update_one(
-        {"equipment_id": equipment_id, "user_id": user.user_id},
-        {"$set": data}
-    )
-    return {"message": "Updated"}
-
-# ==================== PERMITS ====================
-
-@api_router.get("/permits")
-async def get_permits(project_id: str, user: User = Depends(get_current_user)):
-    permits = await db.permits.find(
-        {"project_id": project_id, "user_id": user.user_id},
-        {"_id": 0}
-    ).to_list(100)
-    return permits
-
-@api_router.post("/permits")
-async def add_permit(data: dict, user: User = Depends(get_current_user)):
-    permit = Permit(
-        project_id=data["project_id"],
-        user_id=user.user_id,
-        name=data["name"],
-        status=data.get("status", "pending")
-    )
-    doc = permit.model_dump()
-    await db.permits.insert_one(doc)
-    doc.pop("_id", None)
-    return doc
-
-# ==================== HIRING ====================
-
-@api_router.get("/candidates")
-async def get_candidates(project_id: str, user: User = Depends(get_current_user)):
-    candidates = await db.candidates.find(
-        {"project_id": project_id, "user_id": user.user_id},
-        {"_id": 0}
-    ).to_list(100)
-    return candidates
-
-@api_router.post("/candidates")
-async def add_candidate(data: HiringCandidateCreate, user: User = Depends(get_current_user)):
-    candidate = HiringCandidate(
-        project_id=data.project_id,
-        user_id=user.user_id,
-        name=data.name,
-        position=data.position,
-        stage=data.stage,
-        email=data.email
-    )
-    doc = candidate.model_dump()
-    await db.candidates.insert_one(doc)
-    doc.pop("_id", None)
-    return doc
-
-@api_router.put("/candidates/{candidate_id}")
-async def update_candidate(candidate_id: str, data: dict, user: User = Depends(get_current_user)):
-    data.pop("_id", None)
-    await db.candidates.update_one(
-        {"candidate_id": candidate_id, "user_id": user.user_id},
-        {"$set": data}
-    )
-    return {"message": "Updated"}
-
-# ==================== VENDORS ====================
-
-@api_router.get("/vendors")
-async def get_vendors(project_id: str, user: User = Depends(get_current_user)):
-    vendors = await db.vendors.find(
-        {"project_id": project_id, "user_id": user.user_id},
-        {"_id": 0}
-    ).to_list(100)
-    return vendors
-
-@api_router.post("/vendors")
-async def add_vendor(data: dict, user: User = Depends(get_current_user)):
-    vendor = Vendor(
-        project_id=data["project_id"],
-        user_id=user.user_id,
-        name=data["name"],
-        category=data["category"],
-        status=data.get("status", "active"),
-        delivery_status=data.get("delivery_status", "on_time")
-    )
-    doc = vendor.model_dump()
-    await db.vendors.insert_one(doc)
-    doc.pop("_id", None)
-    return doc
-
-# ==================== MENU ITEMS ====================
-
-@api_router.get("/menu-items")
-async def get_menu_items(project_id: str, user: User = Depends(get_current_user)):
-    items = await db.menu_items.find(
-        {"project_id": project_id, "user_id": user.user_id},
-        {"_id": 0}
-    ).to_list(100)
-    return items
-
-@api_router.post("/menu-items")
-async def add_menu_item(data: dict, user: User = Depends(get_current_user)):
-    item = MenuItem(
-        project_id=data["project_id"],
-        user_id=user.user_id,
-        name=data["name"],
-        cost=data["cost"],
-        price=data["price"],
-        category=data["category"]
-    )
-    doc = item.model_dump()
-    await db.menu_items.insert_one(doc)
-    doc.pop("_id", None)
-    return doc
-
-# ==================== LEASE CLAUSES ====================
-
-@api_router.get("/lease-clauses")
-async def get_lease_clauses(project_id: str, user: User = Depends(get_current_user)):
-    clauses = await db.lease_clauses.find(
-        {"project_id": project_id, "user_id": user.user_id},
-        {"_id": 0}
-    ).to_list(100)
-    return clauses
-
-@api_router.post("/lease-clauses")
-async def add_lease_clause(data: dict, user: User = Depends(get_current_user)):
-    clause = LeaseClause(
-        project_id=data["project_id"],
-        user_id=user.user_id,
-        title=data["title"],
-        status=data.get("status", "reviewing"),
-        notes=data.get("notes")
-    )
-    doc = clause.model_dump()
-    await db.lease_clauses.insert_one(doc)
-    doc.pop("_id", None)
-    return doc
-
-@api_router.put("/lease-clauses/{clause_id}")
-async def update_lease_clause(clause_id: str, data: dict, user: User = Depends(get_current_user)):
-    data.pop("_id", None)
-    await db.lease_clauses.update_one(
-        {"clause_id": clause_id, "user_id": user.user_id},
-        {"$set": data}
-    )
-    return {"message": "Updated"}
-
-# ==================== UNITS (EXPANSION) ====================
+# ==================== UNITS ENDPOINTS ====================
 
 @api_router.get("/units")
 async def get_units(user: User = Depends(get_current_user)):
+    """Get all units"""
     units = await db.units.find({"user_id": user.user_id}, {"_id": 0}).to_list(100)
     return units
 
 @api_router.post("/units")
 async def add_unit(data: dict, user: User = Depends(get_current_user)):
+    """Add a new unit"""
+    profile = await get_user_profile(user)
     unit = Unit(
         user_id=user.user_id,
+        profile_id=profile["profile_id"],
         name=data["name"],
         location=data["location"],
         status=data.get("status", "active"),
-        monthly_revenue=data.get("monthly_revenue", 0)
+        monthly_revenue=data.get("monthly_revenue", 0),
+        open_date=data.get("open_date")
     )
     doc = unit.model_dump()
     await db.units.insert_one(doc)
     doc.pop("_id", None)
     return doc
 
-# ==================== NOTIFICATIONS ====================
+@api_router.put("/units/{unit_id}")
+async def update_unit(unit_id: str, data: dict, user: User = Depends(get_current_user)):
+    """Update a unit"""
+    data.pop("_id", None)
+    data.pop("unit_id", None)
+    await db.units.update_one(
+        {"unit_id": unit_id, "user_id": user.user_id},
+        {"$set": data}
+    )
+    unit = await db.units.find_one({"unit_id": unit_id}, {"_id": 0})
+    return unit
+
+@api_router.delete("/units/{unit_id}")
+async def delete_unit(unit_id: str, user: User = Depends(get_current_user)):
+    """Delete a unit"""
+    await db.units.delete_one({"unit_id": unit_id, "user_id": user.user_id})
+    return {"message": "Deleted"}
+
+# ==================== NOTIFICATIONS ENDPOINTS ====================
 
 @api_router.get("/notifications")
 async def get_notifications(user: User = Depends(get_current_user)):
+    """Get notifications"""
     notifications = await db.notifications.find(
         {"user_id": user.user_id},
         {"_id": 0}
@@ -625,6 +1006,7 @@ async def get_notifications(user: User = Depends(get_current_user)):
 
 @api_router.post("/notifications/read")
 async def mark_notifications_read(user: User = Depends(get_current_user)):
+    """Mark all notifications as read"""
     await db.notifications.update_many(
         {"user_id": user.user_id, "read": False},
         {"$set": {"read": True}}
@@ -642,18 +1024,22 @@ async def ai_analysis(data: AIAnalysisRequest, user: User = Depends(get_current_
     if not api_key:
         raise HTTPException(status_code=500, detail="AI service not configured")
     
+    # Get business profile for context
+    profile = await get_user_profile(user)
+    
     system_messages = {
-        "lease": "You are an expert restaurant lease analyst. Analyze lease terms and identify potential issues, favorable clauses, and negotiation points. Provide actionable recommendations.",
-        "menu": "You are a restaurant menu engineering expert. Analyze menu items for profitability, pricing strategy, and cost optimization. Provide specific recommendations.",
-        "cost": "You are a restaurant cost analyst. Calculate food costs, suggest pricing, and identify opportunities for cost reduction while maintaining quality.",
-        "site": "You are a restaurant site analysis expert. Evaluate location potential based on demographics, foot traffic, competition, and market conditions."
+        "lease": f"You are an expert restaurant lease analyst. The restaurant is called '{profile.get('concept', {}).get('restaurant_name', 'the restaurant')}', a {profile.get('concept', {}).get('concept_type', '')} concept. Analyze lease terms and identify potential issues, favorable clauses, and negotiation points. Provide actionable recommendations.",
+        "menu": f"You are a restaurant menu engineering expert. The restaurant is '{profile.get('concept', {}).get('restaurant_name', 'the restaurant')}', targeting a {profile.get('menu', {}).get('price_range', '')} price point. Analyze menu items for profitability, pricing strategy, and cost optimization. Provide specific recommendations.",
+        "cost": f"You are a restaurant cost analyst. Target food cost is {profile.get('financial', {}).get('target_food_cost_percent', 30)}%. Calculate food costs, suggest pricing, and identify opportunities for cost reduction while maintaining quality.",
+        "site": f"You are a restaurant site analysis expert. The concept is a {profile.get('concept', {}).get('concept_type', '')} restaurant. Evaluate location potential based on demographics, foot traffic, competition, and market conditions.",
+        "business": f"You are a restaurant business consultant. The restaurant is '{profile.get('concept', {}).get('restaurant_name', 'the restaurant')}' with a total budget of ${profile.get('financial', {}).get('total_budget', 0):,.0f}. Provide strategic advice."
     }
     
     system_message = system_messages.get(data.analysis_type, "You are a helpful restaurant business assistant.")
     
     chat = LlmChat(
         api_key=api_key,
-        session_id=f"analysis_{user.user_id}_{data.project_id}",
+        session_id=f"analysis_{user.user_id}",
         system_message=system_message
     ).with_model("openai", "gpt-5.2")
     
@@ -671,13 +1057,16 @@ async def ai_cost_calculator(data: dict, user: User = Depends(get_current_user))
     if not api_key:
         raise HTTPException(status_code=500, detail="AI service not configured")
     
+    profile = await get_user_profile(user)
+    target_food_cost = profile.get("financial", {}).get("target_food_cost_percent", 30)
+    
     chat = LlmChat(
         api_key=api_key,
         session_id=f"cost_calc_{user.user_id}",
-        system_message="""You are a restaurant cost calculator. Given ingredient costs and quantities, calculate:
+        system_message=f"""You are a restaurant cost calculator. The target food cost percentage is {target_food_cost}%. Given ingredient costs and quantities, calculate:
 1. Total recipe cost
 2. Cost per serving
-3. Suggested menu price (targeting 30% food cost)
+3. Suggested menu price (targeting {target_food_cost}% food cost)
 4. Profit margin analysis
 Respond in a structured format."""
     ).with_model("openai", "gpt-5.2")
@@ -691,14 +1080,22 @@ Respond in a structured format."""
     
     return {"calculation": response}
 
-# ==================== SITE DEMOGRAPHICS (SIMULATED LIVE DATA) ====================
+# ==================== SITE DEMOGRAPHICS ====================
 
 @api_router.get("/site/demographics")
-async def get_site_demographics(lat: float = 40.7128, lng: float = -74.0060):
-    """Get simulated live demographics for a location"""
+async def get_site_demographics(lat: float = 40.7128, lng: float = -74.0060, user: User = Depends(get_current_user)):
+    """Get demographics for a location"""
     import random
     
-    # Simulated live data that varies slightly each call
+    profile = await get_user_profile(user)
+    profile_lat = profile.get("location", {}).get("coordinates", {}).get("lat", lat)
+    profile_lng = profile.get("location", {}).get("coordinates", {}).get("lng", lng)
+    
+    if profile_lat != 0:
+        lat = profile_lat
+    if profile_lng != 0:
+        lng = profile_lng
+    
     base_foot_traffic = 12500
     variation = random.randint(-500, 500)
     
@@ -734,7 +1131,7 @@ async def get_site_demographics(lat: float = 40.7128, lng: float = -74.0060):
 
 @api_router.get("/")
 async def root():
-    return {"message": "Restaurateur Pro API", "status": "operational"}
+    return {"message": "Restaurateur Pro API", "version": "2.0", "status": "operational"}
 
 @api_router.get("/health")
 async def health():
@@ -744,7 +1141,6 @@ async def health():
 
 from emergentintegrations.payments.stripe.checkout import StripeCheckout, CheckoutSessionResponse, CheckoutStatusResponse, CheckoutSessionRequest
 
-# Subscription Plans - Fixed pricing on backend
 SUBSCRIPTION_PLANS = {
     "single_unit": {
         "name": "Single Unit",
@@ -779,10 +1175,6 @@ class SubscriptionRequest(BaseModel):
     plan_id: str
     origin_url: str
 
-class UpdatePriceIdRequest(BaseModel):
-    plan_id: str
-    stripe_price_id: str
-
 @api_router.get("/subscriptions/plans")
 async def get_subscription_plans():
     """Get available subscription plans"""
@@ -799,46 +1191,21 @@ async def get_subscription_plans():
         ]
     }
 
-@api_router.post("/subscriptions/set-price-id")
-async def set_stripe_price_id(data: UpdatePriceIdRequest):
-    """Set Stripe Price ID for a plan (admin endpoint)"""
-    if data.plan_id not in SUBSCRIPTION_PLANS:
-        raise HTTPException(status_code=400, detail="Invalid plan ID")
-    
-    SUBSCRIPTION_PLANS[data.plan_id]["price_id"] = data.stripe_price_id
-    
-    # Store in database for persistence
-    await db.stripe_config.update_one(
-        {"plan_id": data.plan_id},
-        {"$set": {"price_id": data.stripe_price_id, "updated_at": datetime.now(timezone.utc).isoformat()}},
-        upsert=True
-    )
-    
-    return {"message": f"Price ID set for {data.plan_id}", "price_id": data.stripe_price_id}
-
 @api_router.post("/subscriptions/checkout")
 async def create_subscription_checkout(data: SubscriptionRequest, request: Request, user: User = Depends(get_current_user)):
-    """Create a Stripe checkout session for subscription"""
+    """Create a Stripe checkout session"""
     if data.plan_id not in SUBSCRIPTION_PLANS:
         raise HTTPException(status_code=400, detail="Invalid plan ID")
     
     plan = SUBSCRIPTION_PLANS[data.plan_id]
     
-    # Load price ID from database if not in memory
-    if not plan["price_id"]:
-        config = await db.stripe_config.find_one({"plan_id": data.plan_id}, {"_id": 0})
-        if config and config.get("price_id"):
-            plan["price_id"] = config["price_id"]
-    
     stripe_api_key = os.environ.get("STRIPE_API_KEY")
     if not stripe_api_key:
         raise HTTPException(status_code=500, detail="Stripe not configured")
     
-    # Build URLs from frontend origin
     success_url = f"{data.origin_url}/subscription/success?session_id={{CHECKOUT_SESSION_ID}}"
     cancel_url = f"{data.origin_url}/pricing"
     
-    # Initialize Stripe
     host_url = str(request.base_url).rstrip('/')
     webhook_url = f"{host_url}/api/webhook/stripe"
     stripe_checkout = StripeCheckout(api_key=stripe_api_key, webhook_url=webhook_url)
@@ -851,28 +1218,16 @@ async def create_subscription_checkout(data: SubscriptionRequest, request: Reque
     }
     
     try:
-        # Use Price ID if available, otherwise use amount
-        if plan["price_id"]:
-            checkout_request = CheckoutSessionRequest(
-                stripe_price_id=plan["price_id"],
-                quantity=1,
-                success_url=success_url,
-                cancel_url=cancel_url,
-                metadata=metadata
-            )
-        else:
-            # Fallback to custom amount (one-time payment simulation)
-            checkout_request = CheckoutSessionRequest(
-                amount=plan["price"],
-                currency="usd",
-                success_url=success_url,
-                cancel_url=cancel_url,
-                metadata=metadata
-            )
+        checkout_request = CheckoutSessionRequest(
+            stripe_price_id=plan["price_id"],
+            quantity=1,
+            success_url=success_url,
+            cancel_url=cancel_url,
+            metadata=metadata
+        )
         
         session: CheckoutSessionResponse = await stripe_checkout.create_checkout_session(checkout_request)
         
-        # Create payment transaction record
         transaction = {
             "transaction_id": f"txn_{uuid.uuid4().hex[:12]}",
             "session_id": session.session_id,
@@ -895,7 +1250,7 @@ async def create_subscription_checkout(data: SubscriptionRequest, request: Reque
 
 @api_router.get("/subscriptions/status/{session_id}")
 async def get_subscription_status(session_id: str, user: User = Depends(get_current_user)):
-    """Check subscription payment status"""
+    """Check payment status"""
     stripe_api_key = os.environ.get("STRIPE_API_KEY")
     if not stripe_api_key:
         raise HTTPException(status_code=500, detail="Stripe not configured")
@@ -905,18 +1260,15 @@ async def get_subscription_status(session_id: str, user: User = Depends(get_curr
     try:
         status: CheckoutStatusResponse = await stripe_checkout.get_checkout_status(session_id)
         
-        # Update transaction in database
         update_data = {
             "payment_status": status.payment_status,
             "status": status.status,
             "updated_at": datetime.now(timezone.utc).isoformat()
         }
         
-        # Check if already processed
         existing = await db.payment_transactions.find_one({"session_id": session_id}, {"_id": 0})
         
         if existing and existing.get("payment_status") != "paid" and status.payment_status == "paid":
-            # First time marking as paid - update user subscription
             await db.users.update_one(
                 {"user_id": user.user_id},
                 {"$set": {
@@ -944,9 +1296,8 @@ async def get_subscription_status(session_id: str, user: User = Depends(get_curr
 
 @api_router.get("/subscriptions/my-subscription")
 async def get_my_subscription(user: User = Depends(get_current_user)):
-    """Get current user's subscription status"""
+    """Get current subscription"""
     user_doc = await db.users.find_one({"user_id": user.user_id}, {"_id": 0})
-    
     return {
         "plan": user_doc.get("subscription_plan"),
         "status": user_doc.get("subscription_status", "none"),
@@ -970,7 +1321,6 @@ async def stripe_webhook(request: Request):
     try:
         webhook_response = await stripe_checkout.handle_webhook(body, signature)
         
-        # Update transaction based on webhook
         if webhook_response.session_id:
             await db.payment_transactions.update_one(
                 {"session_id": webhook_response.session_id},
@@ -987,7 +1337,8 @@ async def stripe_webhook(request: Request):
         logger.error(f"Webhook error: {e}")
         raise HTTPException(status_code=400, detail=str(e))
 
-# Include router and middleware
+# ==================== MIDDLEWARE & STARTUP ====================
+
 app.include_router(api_router)
 
 app.add_middleware(

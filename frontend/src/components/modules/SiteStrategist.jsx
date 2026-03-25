@@ -24,7 +24,7 @@ L.Icon.Default.mergeOptions({
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
-const SiteStrategist = ({ project }) => {
+const SiteStrategist = ({ profile }) => {
   const [demographics, setDemographics] = useState(null);
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -33,13 +33,19 @@ const SiteStrategist = ({ project }) => {
   const [leaseAnalysis, setLeaseAnalysis] = useState(null);
 
   useEffect(() => {
+    // Use location from profile if available
+    if (profile?.location?.coordinates?.lat && profile?.location?.coordinates?.lng) {
+      setMapCenter([profile.location.coordinates.lat, profile.location.coordinates.lng]);
+    }
     fetchDemographics();
-  }, []);
+  }, [profile]);
 
   const fetchDemographics = async () => {
     setLoading(true);
     try {
-      const response = await axios.get(`${API}/site/demographics?lat=${mapCenter[0]}&lng=${mapCenter[1]}`);
+      const lat = profile?.location?.coordinates?.lat || mapCenter[0];
+      const lng = profile?.location?.coordinates?.lng || mapCenter[1];
+      const response = await axios.get(`${API}/site/demographics?lat=${lat}&lng=${lng}`);
       setDemographics(response.data);
     } catch (error) {
       console.error("Error fetching demographics:", error);
@@ -58,9 +64,8 @@ const SiteStrategist = ({ project }) => {
     setAnalyzing(true);
     try {
       const response = await axios.post(`${API}/ai/analyze`, {
-        project_id: project.project_id,
         analysis_type: "lease",
-        content: "Analyze this commercial lease for a restaurant: Base rent $8,500/month with 3% annual escalation. Triple net (NNN) lease with estimated CAM charges of $2.50/sqft. 10-year term with one 5-year renewal option. Exclusive use clause for 'casual dining restaurant'. Landlord responsible for roof and structure. Tenant responsible for HVAC maintenance. 6-month rent abatement during build-out. Personal guarantee required for first 3 years."
+        content: `Analyze this commercial lease for a restaurant: Base rent $8,500/month with 3% annual escalation. Triple net (NNN) lease with estimated CAM charges of $2.50/sqft. 10-year term with one 5-year renewal option. Exclusive use clause for 'casual dining restaurant'. Landlord responsible for roof and structure. Tenant responsible for HVAC maintenance. 6-month rent abatement during build-out. Personal guarantee required for first 3 years. Restaurant concept: ${profile?.concept?.restaurant_name || 'Restaurant'}, ${profile?.concept?.concept_type || 'casual dining'}.`
       });
       setLeaseAnalysis(response.data.analysis);
       toast.success("Lease analysis complete!");

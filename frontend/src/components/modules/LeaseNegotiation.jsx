@@ -14,21 +14,21 @@ import { Textarea } from "@/components/ui/textarea";
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
-const LeaseNegotiation = ({ project }) => {
+const LeaseNegotiation = ({ profile }) => {
   const [clauses, setClauses] = useState([]);
   const [aiInput, setAiInput] = useState("");
   const [aiAnalysis, setAiAnalysis] = useState(null);
   const [analyzing, setAnalyzing] = useState(false);
 
   useEffect(() => {
-    if (project?.project_id) {
+    if (profile?.profile_id) {
       fetchClauses();
     }
-  }, [project?.project_id]);
+  }, [profile?.profile_id]);
 
   const fetchClauses = async () => {
     try {
-      const response = await axios.get(`${API}/lease-clauses?project_id=${project.project_id}`);
+      const response = await axios.get(`${API}/lease-clauses`);
       setClauses(response.data);
     } catch (error) {
       console.error("Error fetching clauses:", error);
@@ -44,9 +44,8 @@ const LeaseNegotiation = ({ project }) => {
     setAnalyzing(true);
     try {
       const response = await axios.post(`${API}/ai/analyze`, {
-        project_id: project.project_id,
         analysis_type: "lease",
-        content: aiInput
+        content: `Restaurant: ${profile?.concept?.restaurant_name || 'Restaurant'}. Lease Clause: ${aiInput}`
       });
       setAiAnalysis(response.data.analysis);
       toast.success("Analysis complete!");

@@ -14,22 +14,22 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
-const CommandCenter = ({ project, onProjectUpdate }) => {
+const CommandCenter = ({ profile, summary, onRefresh }) => {
   const [tasks, setTasks] = useState([]);
   const [team, setTeam] = useState([]);
   const [budget, setBudget] = useState([]);
 
   useEffect(() => {
-    if (project?.project_id) {
+    if (profile?.profile_id) {
       fetchTasks();
       fetchTeam();
       fetchBudget();
     }
-  }, [project?.project_id]);
+  }, [profile?.profile_id]);
 
   const fetchTasks = async () => {
     try {
-      const response = await axios.get(`${API}/tasks?project_id=${project.project_id}`);
+      const response = await axios.get(`${API}/tasks`);
       setTasks(response.data);
     } catch (error) {
       console.error("Error fetching tasks:", error);
@@ -38,7 +38,7 @@ const CommandCenter = ({ project, onProjectUpdate }) => {
 
   const fetchTeam = async () => {
     try {
-      const response = await axios.get(`${API}/team?project_id=${project.project_id}`);
+      const response = await axios.get(`${API}/team`);
       setTeam(response.data);
     } catch (error) {
       console.error("Error fetching team:", error);
@@ -47,22 +47,34 @@ const CommandCenter = ({ project, onProjectUpdate }) => {
 
   const fetchBudget = async () => {
     try {
-      const response = await axios.get(`${API}/budget?project_id=${project.project_id}`);
+      const response = await axios.get(`${API}/budget`);
       setBudget(response.data);
     } catch (error) {
       console.error("Error fetching budget:", error);
     }
   };
 
+  // Determine phase based on onboarding completion and operational status
+  const determinePhase = () => {
+    if (!profile?.onboarding_completed) return "concept";
+    if (!profile?.location?.address) return "site";
+    if (!profile?.operational?.target_open_date) return "construction";
+    const targetDate = new Date(profile?.operational?.target_open_date);
+    const now = new Date();
+    if (targetDate > now) return "opening";
+    return "live";
+  };
+
+  const currentPhase = determinePhase();
   const phases = [
-    { id: "concept", label: "Concept", complete: true },
-    { id: "site", label: "Site", complete: project?.phase !== "concept" },
-    { id: "construction", label: "Construction", complete: ["construction", "opening", "live"].includes(project?.phase) },
-    { id: "opening", label: "Opening", complete: ["opening", "live"].includes(project?.phase) },
-    { id: "live", label: "Live", complete: project?.phase === "live" },
+    { id: "concept", label: "Concept", complete: currentPhase !== "concept" },
+    { id: "site", label: "Site", complete: ["construction", "opening", "live"].includes(currentPhase) },
+    { id: "construction", label: "Construction", complete: ["opening", "live"].includes(currentPhase) },
+    { id: "opening", label: "Opening", complete: currentPhase === "live" },
+    { id: "live", label: "Live", complete: currentPhase === "live" },
   ];
 
-  const currentPhaseIndex = phases.findIndex(p => p.id === project?.phase);
+  const currentPhaseIndex = phases.findIndex(p => p.id === currentPhase);
 
   // Sample tasks if none exist
   const displayTasks = tasks.length > 0 ? tasks : [
@@ -122,23 +134,25 @@ const CommandCenter = ({ project, onProjectUpdate }) => {
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl md:text-3xl font-heading font-bold text-zinc-100">
-            {project?.name || "Restaurant Project"}
+            {profile?.concept?.restaurant_name || "Your Restaurant"}
           </h1>
           <div className="flex items-center gap-4 mt-2 text-sm text-zinc-400">
             <span className="flex items-center gap-1">
               <MapPin className="w-4 h-4" />
-              {project?.location || "Location TBD"}
+              {profile?.location?.city && profile?.location?.state 
+                ? `${profile.location.city}, ${profile.location.state}` 
+                : "Location TBD"}
             </span>
             <span className="flex items-center gap-1">
               <Calendar className="w-4 h-4" />
-              Phase: {project?.phase?.charAt(0).toUpperCase() + project?.phase?.slice(1) || "Concept"}
+              Phase: {currentPhase.charAt(0).toUpperCase() + currentPhase.slice(1)}
             </span>
           </div>
         </div>
         <div className="flex items-center gap-3">
           <div className="text-right">
             <div className="text-3xl font-heading font-bold text-[#d4af37]">
-              {project?.completion || 15}%
+              {profile?.onboarding_completed ? Math.min(100, 15 + (currentPhaseIndex * 20)) : 5}%
             </div>
             <div className="text-xs text-zinc-500 uppercase tracking-wider">Complete</div>
           </div>

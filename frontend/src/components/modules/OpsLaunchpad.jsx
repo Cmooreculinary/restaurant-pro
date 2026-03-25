@@ -16,7 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
-const OpsLaunchpad = ({ project }) => {
+const OpsLaunchpad = ({ profile }) => {
   const [candidates, setCandidates] = useState([]);
   const [vendors, setVendors] = useState([]);
   const [menuItems, setMenuItems] = useState([]);
@@ -26,16 +26,16 @@ const OpsLaunchpad = ({ project }) => {
   const [calculating, setCalculating] = useState(false);
 
   useEffect(() => {
-    if (project?.project_id) {
+    if (profile?.profile_id) {
       fetchCandidates();
       fetchVendors();
       fetchMenuItems();
     }
-  }, [project?.project_id]);
+  }, [profile?.profile_id]);
 
   const fetchCandidates = async () => {
     try {
-      const response = await axios.get(`${API}/candidates?project_id=${project.project_id}`);
+      const response = await axios.get(`${API}/candidates`);
       setCandidates(response.data);
     } catch (error) {
       console.error("Error fetching candidates:", error);
@@ -44,7 +44,7 @@ const OpsLaunchpad = ({ project }) => {
 
   const fetchVendors = async () => {
     try {
-      const response = await axios.get(`${API}/vendors?project_id=${project.project_id}`);
+      const response = await axios.get(`${API}/vendors`);
       setVendors(response.data);
     } catch (error) {
       console.error("Error fetching vendors:", error);
@@ -53,7 +53,7 @@ const OpsLaunchpad = ({ project }) => {
 
   const fetchMenuItems = async () => {
     try {
-      const response = await axios.get(`${API}/menu-items?project_id=${project.project_id}`);
+      const response = await axios.get(`${API}/menu-items`);
       setMenuItems(response.data);
     } catch (error) {
       console.error("Error fetching menu items:", error);
@@ -117,8 +117,8 @@ const OpsLaunchpad = ({ project }) => {
     }
   };
 
-  const openRoles = 8;
-  const foodCostPercent = 28.5;
+  const openRoles = profile?.team?.total_staff_needed || 8;
+  const foodCostPercent = profile?.financial?.target_food_cost_percent || 28.5;
 
   return (
     <div className="space-y-6 animate-fade-in">

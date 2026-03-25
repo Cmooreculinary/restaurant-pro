@@ -21,20 +21,20 @@ import {
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
-const GroundUp = ({ project }) => {
+const GroundUp = ({ profile }) => {
   const [permits, setPermits] = useState([]);
   const [equipment, setEquipment] = useState([]);
 
   useEffect(() => {
-    if (project?.project_id) {
+    if (profile?.profile_id) {
       fetchPermits();
       fetchEquipment();
     }
-  }, [project?.project_id]);
+  }, [profile?.profile_id]);
 
   const fetchPermits = async () => {
     try {
-      const response = await axios.get(`${API}/permits?project_id=${project.project_id}`);
+      const response = await axios.get(`${API}/permits`);
       setPermits(response.data);
     } catch (error) {
       console.error("Error fetching permits:", error);
@@ -43,7 +43,7 @@ const GroundUp = ({ project }) => {
 
   const fetchEquipment = async () => {
     try {
-      const response = await axios.get(`${API}/equipment?project_id=${project.project_id}`);
+      const response = await axios.get(`${API}/equipment`);
       setEquipment(response.data);
     } catch (error) {
       console.error("Error fetching equipment:", error);
@@ -155,15 +155,15 @@ const GroundUp = ({ project }) => {
             </div>
             <div className="grid grid-cols-3 gap-2 mt-4">
               <div className="p-3 rounded-lg bg-zinc-900/50 text-center">
-                <p className="text-lg font-bold text-zinc-100">2,800</p>
+                <p className="text-lg font-bold text-zinc-100">{profile?.location?.square_footage || 2800}</p>
                 <p className="text-xs text-zinc-500">Sq. Ft.</p>
               </div>
               <div className="p-3 rounded-lg bg-zinc-900/50 text-center">
-                <p className="text-lg font-bold text-zinc-100">65</p>
+                <p className="text-lg font-bold text-zinc-100">{profile?.location?.seating_capacity || 65}</p>
                 <p className="text-xs text-zinc-500">Seats</p>
               </div>
               <div className="p-3 rounded-lg bg-zinc-900/50 text-center">
-                <p className="text-lg font-bold text-zinc-100">450</p>
+                <p className="text-lg font-bold text-zinc-100">{Math.round((profile?.location?.square_footage || 2800) * 0.16)}</p>
                 <p className="text-xs text-zinc-500">Kitchen Sq.Ft.</p>
               </div>
             </div>
