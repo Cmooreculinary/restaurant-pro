@@ -32,12 +32,8 @@ const ExpansionToolkit = ({ profile }) => {
     }
   };
 
-  // Sample units if none exist
-  const displayUnits = units.length > 0 ? units : [
-    { unit_id: "1", name: "Downtown Flagship", location: "Manhattan, NY", status: "active", monthly_revenue: 185000 },
-    { unit_id: "2", name: "Brooklyn Heights", location: "Brooklyn, NY", status: "active", monthly_revenue: 142000 },
-    { unit_id: "3", name: "Hoboken", location: "Hoboken, NJ", status: "opening", monthly_revenue: 0 },
-  ];
+  // Use actual data only
+  const displayUnits = units;
 
   const totalRevenue = displayUnits.reduce((acc, unit) => acc + unit.monthly_revenue, 0);
   const activeUnits = displayUnits.filter(u => u.status === "active").length;

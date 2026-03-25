@@ -196,3 +196,95 @@ h1, h2, h3, h4, h5, h6, .font-heading {
 .phase-step.active::after {
     background: linear-gradient(90deg, #d4af37 0%, #27272a 100%);
 }
+
+/* Mobile responsiveness improvements */
+@media (max-width: 640px) {
+    .glass-card {
+        backdrop-filter: blur(8px);
+    }
+    
+    /* Ensure cards don't overflow */
+    .overflow-x-auto {
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    /* Better touch targets */
+    button, a, [role="button"] {
+        min-height: 44px;
+    }
+    
+    /* Reduce padding on mobile */
+    .p-6 {
+        padding: 1rem;
+    }
+    
+    .p-8 {
+        padding: 1.5rem;
+    }
+    
+    /* Card grids stack on mobile */
+    .grid-cols-2 {
+        grid-template-columns: 1fr;
+    }
+    
+    /* Horizontal scroll for phase stepper */
+    .phase-stepper-mobile {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        padding-bottom: 0.5rem;
+    }
+}
+
+/* Tablet adjustments */
+@media (min-width: 641px) and (max-width: 1024px) {
+    .lg\\:grid-cols-12 {
+        grid-template-columns: repeat(8, 1fr);
+    }
+    
+    .lg\\:col-span-8 {
+        grid-column: span 8;
+    }
+    
+    .lg\\:col-span-4 {
+        grid-column: span 8;
+    }
+}
+
+/* Animations */
+@keyframes fade-in {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.animate-fade-in {
+    animation: fade-in 0.3s ease-out;
+}
+
+@keyframes slide-up {
+    from {
+        opacity: 0;
+        transform: translateY(16px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.animate-slide-up {
+    animation: slide-up 0.4s ease-out;
+}
+
+/* Staggered animations for lists */
+.stagger-1 { animation-delay: 0.05s; }
+.stagger-2 { animation-delay: 0.1s; }
+.stagger-3 { animation-delay: 0.15s; }
+.stagger-4 { animation-delay: 0.2s; }
+.stagger-5 { animation-delay: 0.25s; }
+.stagger-6 { animation-delay: 0.3s; }

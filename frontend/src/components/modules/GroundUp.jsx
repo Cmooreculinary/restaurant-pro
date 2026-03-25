@@ -50,24 +50,9 @@ const GroundUp = ({ profile }) => {
     }
   };
 
-  // Sample permits if none exist
-  const displayPermits = permits.length > 0 ? permits : [
-    { permit_id: "1", name: "Health Department", status: "approved", submitted_date: "Nov 15" },
-    { permit_id: "2", name: "Fire Marshal", status: "submitted", submitted_date: "Dec 1" },
-    { permit_id: "3", name: "Liquor License", status: "pending", submitted_date: null },
-    { permit_id: "4", name: "Building Permit", status: "approved", submitted_date: "Oct 20" },
-    { permit_id: "5", name: "Sign Permit", status: "pending", submitted_date: null },
-  ];
-
-  // Sample equipment if none exist
-  const displayEquipment = equipment.length > 0 ? equipment : [
-    { equipment_id: "EQ-001", name: "6-Burner Gas Range", specs: "36\" Commercial Grade", status: "delivered" },
-    { equipment_id: "EQ-002", name: "Walk-in Cooler", specs: "8' x 10' - 35°F", status: "ordered" },
-    { equipment_id: "EQ-003", name: "Convection Oven", specs: "Double Stack - Electric", status: "installed" },
-    { equipment_id: "EQ-004", name: "Dish Machine", specs: "High-Temp Commercial", status: "pending" },
-    { equipment_id: "EQ-005", name: "Prep Tables", specs: "72\" Stainless Steel x4", status: "delivered" },
-    { equipment_id: "EQ-006", name: "Hood System", specs: "14' Type I w/ Suppression", status: "installed" },
-  ];
+  // Use actual data only
+  const displayPermits = permits;
+  const displayEquipment = equipment;
 
   const getPermitIcon = (status) => {
     switch (status) {

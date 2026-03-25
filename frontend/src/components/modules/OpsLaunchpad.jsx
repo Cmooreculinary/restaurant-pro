@@ -82,23 +82,9 @@ const OpsLaunchpad = ({ profile }) => {
     }
   };
 
-  // Sample candidates if none exist
-  const displayCandidates = candidates.length > 0 ? candidates : [
-    { candidate_id: "1", name: "Maria Santos", position: "Head Chef", stage: "interview" },
-    { candidate_id: "2", name: "James Wilson", position: "Sous Chef", stage: "application" },
-    { candidate_id: "3", name: "Emily Chen", position: "Server", stage: "onboarding" },
-    { candidate_id: "4", name: "David Park", position: "Line Cook", stage: "application" },
-    { candidate_id: "5", name: "Lisa Thompson", position: "Host", stage: "interview" },
-    { candidate_id: "6", name: "Michael Brown", position: "Bartender", stage: "onboarding" },
-  ];
-
-  // Sample vendors if none exist
-  const displayVendors = vendors.length > 0 ? vendors : [
-    { vendor_id: "1", name: "Sysco Foods", category: "Dry Goods", delivery_status: "on_time" },
-    { vendor_id: "2", name: "US Foods", category: "Produce", delivery_status: "delayed" },
-    { vendor_id: "3", name: "Local Farms Co-op", category: "Fresh Meat", delivery_status: "on_time" },
-    { vendor_id: "4", name: "Pacific Seafood", category: "Seafood", delivery_status: "pending" },
-  ];
+  // Use actual data only
+  const displayCandidates = candidates;
+  const displayVendors = vendors;
 
   const hiringStages = [
     { id: "application", label: "Applications", count: displayCandidates.filter(c => c.stage === "application").length },

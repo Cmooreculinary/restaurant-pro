@@ -57,19 +57,8 @@ const LeaseNegotiation = ({ profile }) => {
     }
   };
 
-  // Sample clauses if none exist
-  const displayClauses = clauses.length > 0 ? clauses : [
-    { clause_id: "1", title: "Base Rent", status: "accepted", notes: "$8,500/month with 3% annual escalation" },
-    { clause_id: "2", title: "CAM Charges", status: "reviewing", notes: "$2.50/sqft, no cap specified" },
-    { clause_id: "3", title: "Lease Term", status: "accepted", notes: "10 years with one 5-year renewal option" },
-    { clause_id: "4", title: "Exclusive Use", status: "counter_offered", notes: "Negotiating broader category definition" },
-    { clause_id: "5", title: "Build-out Period", status: "accepted", notes: "6-month rent abatement" },
-    { clause_id: "6", title: "Personal Guarantee", status: "attention", notes: "Requesting cap and time limit" },
-    { clause_id: "7", title: "HVAC Maintenance", status: "reviewing", notes: "Tenant responsible - requesting inspection" },
-    { clause_id: "8", title: "Signage Rights", status: "accepted", notes: "Approved for exterior and directory" },
-    { clause_id: "9", title: "Assignment Rights", status: "counter_offered", notes: "Requesting transfer flexibility" },
-    { clause_id: "10", title: "Insurance Requirements", status: "reviewing", notes: "Verifying coverage levels" },
-  ];
+  // Use actual data only
+  const displayClauses = clauses;
 
   const getStatusBadge = (status) => {
     switch (status) {
