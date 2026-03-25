@@ -39,7 +39,8 @@ const Landing = () => {
       
       await axios.post(`${BACKEND_URL}${endpoint}`, payload);
       toast.success(isLogin ? "Welcome back!" : "Account created successfully!");
-      navigate("/dashboard");
+      // Force full page reload to refresh auth state
+      window.location.href = "/dashboard";
     } catch (error) {
       const message = error.response?.data?.detail || "Authentication failed";
       toast.error(message);
@@ -57,7 +58,8 @@ const Landing = () => {
     try {
       const response = await axios.post(`${BACKEND_URL}/api/auth/secret`, { code: secretCode });
       toast.success(`Welcome! Session expires in ${response.data.expires_in_days} days`);
-      navigate("/dashboard");
+      // Force full page reload to refresh auth state
+      window.location.href = "/dashboard";
     } catch (error) {
       toast.error("Invalid access code");
     } finally {
