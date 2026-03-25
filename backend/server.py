@@ -749,7 +749,7 @@ SUBSCRIPTION_PLANS = {
     "single_unit": {
         "name": "Single Unit",
         "price": 14.00,
-        "price_id": None,  # Will be set when user provides Stripe Price ID
+        "price_id": "price_1TEsmoHAM0vSVVVHU5WvspOt",
         "features": [
             "1 Restaurant Project",
             "Command Center Access",
@@ -762,7 +762,7 @@ SUBSCRIPTION_PLANS = {
     "multi_unit": {
         "name": "Multi-Unit",
         "price": 18.00,
-        "price_id": None,  # Will be set when user provides Stripe Price ID
+        "price_id": "price_1TEsogHAM0vSVVVHFPc8kY5T",
         "features": [
             "Unlimited Restaurant Projects",
             "All Single Unit Features",
