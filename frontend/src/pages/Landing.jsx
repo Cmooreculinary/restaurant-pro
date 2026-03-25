@@ -1,7 +1,10 @@
 import { ChefHat, LayoutDashboard, Map, Hammer, Rocket, TrendingUp, FileText, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useNavigate } from "react-router-dom";
 
 const Landing = () => {
+  const navigate = useNavigate();
+  
   const handleLogin = () => {
     // REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH
     const redirectUrl = window.location.origin + '/dashboard';
@@ -32,13 +35,23 @@ const Landing = () => {
             </div>
             <span className="text-xl font-heading font-bold text-zinc-100">Restaurateur Pro</span>
           </div>
-          <Button 
-            data-testid="nav-login-btn"
-            onClick={handleLogin}
-            className="bg-zinc-100 text-zinc-900 hover:bg-zinc-200 font-medium"
-          >
-            Sign In with Google
-          </Button>
+          <div className="flex items-center gap-4">
+            <Button 
+              data-testid="nav-pricing-btn"
+              onClick={() => navigate("/pricing")}
+              variant="ghost"
+              className="text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800"
+            >
+              Pricing
+            </Button>
+            <Button 
+              data-testid="nav-login-btn"
+              onClick={handleLogin}
+              className="bg-zinc-100 text-zinc-900 hover:bg-zinc-200 font-medium"
+            >
+              Sign In with Google
+            </Button>
+          </div>
         </nav>
 
         {/* Hero Content */}

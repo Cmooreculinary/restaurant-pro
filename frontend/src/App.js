@@ -8,6 +8,8 @@ import { toast } from "sonner";
 // Pages
 import Landing from "@/pages/Landing";
 import Dashboard from "@/pages/Dashboard";
+import Pricing from "@/pages/Pricing";
+import SubscriptionSuccess from "@/pages/SubscriptionSuccess";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -133,6 +135,14 @@ function AppRouter() {
           <Route 
             path="/dashboard" 
             element={user ? <Dashboard user={user} setUser={setUser} /> : <Landing />} 
+          />
+          <Route 
+            path="/pricing" 
+            element={<Pricing user={user} />} 
+          />
+          <Route 
+            path="/subscription/success" 
+            element={<SubscriptionSuccess user={user} />} 
           />
         </Routes>
       )}
