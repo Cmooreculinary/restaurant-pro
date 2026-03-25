@@ -908,7 +908,6 @@ async def delete_lease_clause(clause_id: str, user: User = Depends(get_current_u
 @api_router.get("/tasks")
 async def get_tasks(user: User = Depends(get_current_user)):
     """Get all tasks"""
-    profile = await get_user_profile(user)
     tasks = await db.tasks.find({"user_id": user.user_id}, {"_id": 0}).to_list(200)
     return tasks
 
