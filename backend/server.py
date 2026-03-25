@@ -385,62 +385,66 @@ async def get_user_profile(user: User) -> dict:
 
 # ==================== AUTH ENDPOINTS ====================
 
-@api_router.post("/auth/session")
-async def exchange_session(request: Request, response: Response):
-    """Exchange session_id from Emergent Auth for a session token"""
-    body = await request.json()
-    session_id = body.get("session_id")
+import hashlib
+
+def hash_password(password: str) -> str:
+    """Simple password hashing"""
+    return hashlib.sha256(password.encode()).hexdigest()
+
+class RegisterRequest(BaseModel):
+    email: str
+    password: str
+    name: str = ""
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+@api_router.post("/auth/register")
+async def register(data: RegisterRequest, response: Response):
+    """Register a new user with email and password"""
+    if not data.email or not data.password:
+        raise HTTPException(status_code=400, detail="Email and password required")
     
-    if not session_id:
-        raise HTTPException(status_code=400, detail="session_id required")
+    if len(data.password) < 6:
+        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
     
-    async with httpx.AsyncClient() as client_http:
-        resp = await client_http.get(
-            "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data",
-            headers={"X-Session-ID": session_id}
-        )
-        
-        if resp.status_code != 200:
-            raise HTTPException(status_code=401, detail="Invalid session_id")
-        
-        auth_data = resp.json()
+    # Check if user exists
+    existing_user = await db.users.find_one({"email": data.email.lower()})
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Email already registered")
     
     user_id = f"user_{uuid.uuid4().hex[:12]}"
-    email = auth_data.get("email")
+    password_hash = hash_password(data.password)
     
-    existing_user = await db.users.find_one({"email": email}, {"_id": 0})
-    if existing_user:
-        user_id = existing_user["user_id"]
-    else:
-        new_user = {
-            "user_id": user_id,
-            "email": email,
-            "name": auth_data.get("name", "User"),
-            "picture": auth_data.get("picture"),
-            "onboarding_completed": False,
-            "created_at": datetime.now(timezone.utc).isoformat()
-        }
-        await db.users.insert_one(new_user)
-        
-        # Create business profile for new user
-        new_profile = BusinessProfile(user_id=user_id)
-        profile_doc = new_profile.model_dump()
-        profile_doc["created_at"] = profile_doc["created_at"].isoformat()
-        profile_doc["updated_at"] = profile_doc["updated_at"].isoformat()
-        await db.business_profiles.insert_one(profile_doc)
+    new_user = {
+        "user_id": user_id,
+        "email": data.email.lower(),
+        "name": data.name or data.email.split("@")[0],
+        "password_hash": password_hash,
+        "picture": None,
+        "onboarding_completed": False,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.users.insert_one(new_user)
     
-    session_token = auth_data.get("session_token", f"sess_{uuid.uuid4().hex}")
+    # Create business profile
+    new_profile = BusinessProfile(user_id=user_id)
+    profile_doc = new_profile.model_dump()
+    profile_doc["created_at"] = profile_doc["created_at"].isoformat()
+    profile_doc["updated_at"] = profile_doc["updated_at"].isoformat()
+    await db.business_profiles.insert_one(profile_doc)
+    
+    # Create session
+    session_token = f"sess_{uuid.uuid4().hex}"
     expires_at = datetime.now(timezone.utc) + timedelta(days=7)
     
-    await db.user_sessions.delete_many({"user_id": user_id})
     await db.user_sessions.insert_one({
         "user_id": user_id,
         "session_token": session_token,
         "expires_at": expires_at.isoformat(),
         "created_at": datetime.now(timezone.utc).isoformat()
     })
-    
-    user = await db.users.find_one({"user_id": user_id}, {"_id": 0})
     
     response.set_cookie(
         key="session_token",
@@ -452,7 +456,49 @@ async def exchange_session(request: Request, response: Response):
         max_age=7 * 24 * 60 * 60
     )
     
-    return user
+    user_response = {k: v for k, v in new_user.items() if k != "password_hash"}
+    return user_response
+
+@api_router.post("/auth/login")
+async def login(data: LoginRequest, response: Response):
+    """Login with email and password"""
+    if not data.email or not data.password:
+        raise HTTPException(status_code=400, detail="Email and password required")
+    
+    user = await db.users.find_one({"email": data.email.lower()})
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    
+    password_hash = hash_password(data.password)
+    if user.get("password_hash") != password_hash:
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    
+    user_id = user["user_id"]
+    
+    # Create session
+    session_token = f"sess_{uuid.uuid4().hex}"
+    expires_at = datetime.now(timezone.utc) + timedelta(days=7)
+    
+    await db.user_sessions.delete_many({"user_id": user_id})
+    await db.user_sessions.insert_one({
+        "user_id": user_id,
+        "session_token": session_token,
+        "expires_at": expires_at.isoformat(),
+        "created_at": datetime.now(timezone.utc).isoformat()
+    })
+    
+    response.set_cookie(
+        key="session_token",
+        value=session_token,
+        httponly=True,
+        secure=True,
+        samesite="none",
+        path="/",
+        max_age=7 * 24 * 60 * 60
+    )
+    
+    user_response = {k: v for k, v in user.items() if k not in ["password_hash", "_id"]}
+    return user_response
 
 @api_router.get("/auth/me")
 async def get_me(user: User = Depends(get_current_user)):

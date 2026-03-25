@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { Check, KeyRound, Loader2 } from "lucide-react";
+import { Check, KeyRound, Loader2, Mail, Lock, User, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { toast } from "sonner";
@@ -10,14 +11,41 @@ const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
 const Landing = () => {
   const navigate = useNavigate();
+  const [showAuth, setShowAuth] = useState(false);
+  const [isLogin, setIsLogin] = useState(true);
   const [showSecretLogin, setShowSecretLogin] = useState(false);
   const [secretCode, setSecretCode] = useState("");
-  const [loggingIn, setLoggingIn] = useState(false);
+  const [loading, setLoading] = useState(false);
   
-  const handleLogin = () => {
-    // REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH
-    const redirectUrl = window.location.origin + '/dashboard';
-    window.location.href = `https://auth.emergentagent.com/?redirect=${encodeURIComponent(redirectUrl)}`;
+  const [formData, setFormData] = useState({
+    email: "",
+    password: "",
+    name: ""
+  });
+
+  const handleAuth = async (e) => {
+    e.preventDefault();
+    if (!formData.email || !formData.password) {
+      toast.error("Please fill in all fields");
+      return;
+    }
+    
+    setLoading(true);
+    try {
+      const endpoint = isLogin ? "/api/auth/login" : "/api/auth/register";
+      const payload = isLogin 
+        ? { email: formData.email, password: formData.password }
+        : { email: formData.email, password: formData.password, name: formData.name };
+      
+      await axios.post(`${BACKEND_URL}${endpoint}`, payload);
+      toast.success(isLogin ? "Welcome back!" : "Account created successfully!");
+      navigate("/dashboard");
+    } catch (error) {
+      const message = error.response?.data?.detail || "Authentication failed";
+      toast.error(message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSecretLogin = async () => {
@@ -25,7 +53,7 @@ const Landing = () => {
       toast.error("Please enter access code");
       return;
     }
-    setLoggingIn(true);
+    setLoading(true);
     try {
       const response = await axios.post(`${BACKEND_URL}/api/auth/secret`, { code: secretCode });
       toast.success(`Welcome! Session expires in ${response.data.expires_in_days} days`);
@@ -33,7 +61,7 @@ const Landing = () => {
     } catch (error) {
       toast.error("Invalid access code");
     } finally {
-      setLoggingIn(false);
+      setLoading(false);
     }
   };
 
@@ -43,7 +71,6 @@ const Landing = () => {
     "Scale & Grow"
   ];
 
-  // Golden dome logo SVG component
   const GoldenDomeLogo = ({ size = 48 }) => (
     <svg width={size} height={size} viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
       <defs>
@@ -54,20 +81,16 @@ const Landing = () => {
           <stop offset="100%" stopColor="#996515" />
         </linearGradient>
       </defs>
-      {/* Base/plate */}
       <ellipse cx="24" cy="40" rx="20" ry="4" fill="url(#goldGrad)" />
-      {/* Dome */}
       <path d="M4 40C4 40 8 16 24 16C40 16 44 40 44 40" fill="url(#goldGrad)" />
-      {/* Top knob */}
       <circle cx="24" cy="12" r="4" fill="url(#goldGrad)" />
-      {/* Reflection lines */}
       <path d="M12 30C12 30 16 22 24 22" stroke="rgba(255,255,255,0.3)" strokeWidth="1.5" fill="none" />
     </svg>
   );
 
   return (
     <div className="min-h-screen relative overflow-hidden">
-      {/* Hero Background Image */}
+      {/* Hero Background */}
       <div 
         className="absolute inset-0 bg-cover bg-center bg-no-repeat"
         style={{
@@ -75,7 +98,6 @@ const Landing = () => {
         }}
       />
       
-      {/* Blueprint overlay effect */}
       <div 
         className="absolute inset-0 mix-blend-soft-light opacity-30"
         style={{
@@ -84,10 +106,8 @@ const Landing = () => {
         }}
       />
       
-      {/* Dark overlay for text readability */}
       <div className="absolute inset-0 bg-gradient-to-b from-[#0a1628]/80 via-[#0a1628]/70 to-[#0a1628]/90" />
       
-      {/* Content Container */}
       <div className="relative z-10 min-h-screen flex flex-col">
         {/* Navigation */}
         <nav className="flex items-center justify-between px-6 md:px-12 py-5">
@@ -106,7 +126,7 @@ const Landing = () => {
             </Button>
             <Button 
               data-testid="nav-login-btn"
-              onClick={handleLogin}
+              onClick={() => { setShowAuth(true); setIsLogin(true); }}
               variant="ghost"
               className="text-white/80 hover:text-white hover:bg-white/10 text-sm"
             >
@@ -115,87 +135,181 @@ const Landing = () => {
           </div>
         </nav>
 
-        {/* Hero Content - Centered */}
+        {/* Main Content */}
         <div className="flex-1 flex flex-col items-center justify-center px-6 text-center pb-20">
-          {/* Logo and Brand Name */}
-          <div className="flex items-center gap-2 mb-4">
-            <GoldenDomeLogo size={56} />
-            <h2 className="text-4xl md:text-5xl">
-              <span className="font-serif italic text-white tracking-wide">Restaurateur</span>
-              <span className="font-bold text-[#d4af37] ml-1">PRO</span>
-            </h2>
-          </div>
-
-          {/* Main Headline */}
-          <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-serif italic text-white mb-4 max-w-4xl leading-tight">
-            Design, Build and Scale Your Concept
-          </h1>
-
-          {/* Subheadline */}
-          <p className="text-[10px] sm:text-xs md:text-sm tracking-[0.2em] md:tracking-[0.3em] text-white/60 uppercase mb-8">
-            The All-In-One Blueprint for Restaurant Success
-          </p>
-
-          {/* CTA Buttons */}
-          <div className="flex flex-col sm:flex-row gap-4 mb-10">
-            <Button 
-              data-testid="hero-get-started-btn"
-              onClick={handleLogin}
-              className="bg-gradient-to-b from-[#f5d485] via-[#d4af37] to-[#b8962e] text-[#1a1a2e] font-semibold px-10 py-6 text-base rounded shadow-lg hover:shadow-xl hover:brightness-110 transition-all min-w-[160px]"
-            >
-              Get Started
-            </Button>
-            <Button 
-              data-testid="hero-learn-more-btn"
-              onClick={() => navigate("/pricing")}
-              variant="outline"
-              className="border-2 border-white/40 bg-transparent text-white font-semibold px-10 py-6 text-base rounded hover:bg-white/10 hover:border-white/60 transition-all min-w-[160px]"
-            >
-              Learn More
-            </Button>
-          </div>
-
-          {/* Feature Checkmarks */}
-          <div className="flex flex-wrap justify-center gap-x-6 gap-y-2 text-white/80">
-            {features.map((feature, index) => (
-              <div key={index} className="flex items-center gap-2">
-                <Check className="w-4 h-4 text-[#d4af37]" strokeWidth={3} />
-                <span className="text-sm">{feature}</span>
+          {!showAuth ? (
+            <>
+              {/* Logo and Brand */}
+              <div className="flex items-center gap-2 mb-4">
+                <GoldenDomeLogo size={56} />
+                <h2 className="text-4xl md:text-5xl">
+                  <span className="font-serif italic text-white tracking-wide">Restaurateur</span>
+                  <span className="font-bold text-[#d4af37] ml-1">PRO</span>
+                </h2>
               </div>
-            ))}
-          </div>
 
-          {/* Secret Login */}
-          <div className="mt-8">
-            {!showSecretLogin ? (
-              <button
-                onClick={() => setShowSecretLogin(true)}
-                className="text-white/30 hover:text-white/50 transition-colors text-xs flex items-center gap-1"
-              >
-                <KeyRound className="w-3 h-3" />
-                Admin Access
-              </button>
-            ) : (
-              <div className="flex items-center gap-2 bg-black/30 backdrop-blur-sm rounded-lg p-2">
-                <Input
-                  type="password"
-                  value={secretCode}
-                  onChange={(e) => setSecretCode(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleSecretLogin()}
-                  placeholder="Access code"
-                  className="w-40 h-8 text-sm bg-transparent border-white/20 text-white placeholder:text-white/40"
-                />
-                <Button
-                  onClick={handleSecretLogin}
-                  disabled={loggingIn}
-                  size="sm"
-                  className="h-8 bg-[#d4af37] text-zinc-900 hover:bg-[#c4a030]"
+              <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-serif italic text-white mb-4 max-w-4xl leading-tight">
+                Design, Build and Scale Your Concept
+              </h1>
+
+              <p className="text-[10px] sm:text-xs md:text-sm tracking-[0.2em] md:tracking-[0.3em] text-white/60 uppercase mb-8">
+                The All-In-One Blueprint for Restaurant Success
+              </p>
+
+              {/* CTA Buttons */}
+              <div className="flex flex-col sm:flex-row gap-4 mb-10">
+                <Button 
+                  data-testid="hero-get-started-btn"
+                  onClick={() => { setShowAuth(true); setIsLogin(false); }}
+                  className="bg-gradient-to-b from-[#f5d485] via-[#d4af37] to-[#b8962e] text-[#1a1a2e] font-semibold px-10 py-6 text-base rounded shadow-lg hover:shadow-xl hover:brightness-110 transition-all min-w-[160px]"
                 >
-                  {loggingIn ? <Loader2 className="w-4 h-4 animate-spin" /> : "Go"}
+                  Get Started
+                </Button>
+                <Button 
+                  data-testid="hero-learn-more-btn"
+                  onClick={() => navigate("/pricing")}
+                  variant="outline"
+                  className="border-2 border-white/40 bg-transparent text-white font-semibold px-10 py-6 text-base rounded hover:bg-white/10 hover:border-white/60 transition-all min-w-[160px]"
+                >
+                  Learn More
                 </Button>
               </div>
-            )}
-          </div>
+
+              {/* Feature Checkmarks */}
+              <div className="flex flex-wrap justify-center gap-x-6 gap-y-2 text-white/80">
+                {features.map((feature, index) => (
+                  <div key={index} className="flex items-center gap-2">
+                    <Check className="w-4 h-4 text-[#d4af37]" strokeWidth={3} />
+                    <span className="text-sm">{feature}</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Secret Login */}
+              <div className="mt-8">
+                {!showSecretLogin ? (
+                  <button
+                    onClick={() => setShowSecretLogin(true)}
+                    className="text-white/30 hover:text-white/50 transition-colors text-xs flex items-center gap-1"
+                  >
+                    <KeyRound className="w-3 h-3" />
+                    Admin Access
+                  </button>
+                ) : (
+                  <div className="flex items-center gap-2 bg-black/30 backdrop-blur-sm rounded-lg p-2">
+                    <Input
+                      type="password"
+                      value={secretCode}
+                      onChange={(e) => setSecretCode(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleSecretLogin()}
+                      placeholder="Access code"
+                      className="w-40 h-8 text-sm bg-transparent border-white/20 text-white placeholder:text-white/40"
+                    />
+                    <Button
+                      onClick={handleSecretLogin}
+                      disabled={loading}
+                      size="sm"
+                      className="h-8 bg-[#d4af37] text-zinc-900 hover:bg-[#c4a030]"
+                    >
+                      {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Go"}
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </>
+          ) : (
+            /* Auth Form */
+            <div className="w-full max-w-md bg-black/40 backdrop-blur-md rounded-2xl p-8 border border-white/10">
+              <div className="flex items-center justify-center gap-2 mb-6">
+                <GoldenDomeLogo size={40} />
+                <h2 className="text-2xl">
+                  <span className="font-serif italic text-white">Restaurateur</span>
+                  <span className="font-bold text-[#d4af37] ml-1">PRO</span>
+                </h2>
+              </div>
+              
+              <h3 className="text-xl font-semibold text-white mb-6 text-center">
+                {isLogin ? "Welcome Back" : "Create Your Account"}
+              </h3>
+              
+              <form onSubmit={handleAuth} className="space-y-4">
+                {!isLogin && (
+                  <div className="space-y-2">
+                    <Label className="text-white/80">Name</Label>
+                    <div className="relative">
+                      <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40" />
+                      <Input
+                        type="text"
+                        value={formData.name}
+                        onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                        placeholder="Your name"
+                        className="pl-10 bg-white/10 border-white/20 text-white placeholder:text-white/40"
+                      />
+                    </div>
+                  </div>
+                )}
+                
+                <div className="space-y-2">
+                  <Label className="text-white/80">Email</Label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40" />
+                    <Input
+                      type="email"
+                      value={formData.email}
+                      onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+                      placeholder="you@example.com"
+                      className="pl-10 bg-white/10 border-white/20 text-white placeholder:text-white/40"
+                    />
+                  </div>
+                </div>
+                
+                <div className="space-y-2">
+                  <Label className="text-white/80">Password</Label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40" />
+                    <Input
+                      type="password"
+                      value={formData.password}
+                      onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
+                      placeholder={isLogin ? "Your password" : "Min 6 characters"}
+                      className="pl-10 bg-white/10 border-white/20 text-white placeholder:text-white/40"
+                    />
+                  </div>
+                </div>
+                
+                <Button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full bg-gradient-to-b from-[#f5d485] via-[#d4af37] to-[#b8962e] text-[#1a1a2e] font-semibold py-6 rounded hover:brightness-110 transition-all"
+                >
+                  {loading ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : (
+                    <>
+                      {isLogin ? "Sign In" : "Create Account"}
+                      <ArrowRight className="w-4 h-4 ml-2" />
+                    </>
+                  )}
+                </Button>
+              </form>
+              
+              <div className="mt-6 text-center">
+                <button
+                  onClick={() => setIsLogin(!isLogin)}
+                  className="text-white/60 hover:text-white text-sm transition-colors"
+                >
+                  {isLogin ? "Don't have an account? Sign up" : "Already have an account? Sign in"}
+                </button>
+              </div>
+              
+              <button
+                onClick={() => setShowAuth(false)}
+                className="mt-4 text-white/40 hover:text-white/60 text-sm w-full text-center transition-colors"
+              >
+                ← Back to home
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>
