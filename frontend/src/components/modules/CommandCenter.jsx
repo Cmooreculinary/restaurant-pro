@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import {
   MapPin, Calendar, DollarSign, Users, AlertTriangle, CheckCircle, Clock,
   ArrowUpRight, ArrowDownRight, Plus, MoreHorizontal, FileText, Sparkles,
-  ClipboardList, X, Loader2
+  ClipboardList, X, Loader2, Trash2, Edit2, Check
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -29,6 +29,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -39,9 +45,13 @@ const CommandCenter = ({ profile, summary, onRefresh }) => {
   const [budget, setBudget] = useState([]);
   const [showAddTask, setShowAddTask] = useState(false);
   const [showAddTeam, setShowAddTeam] = useState(false);
+  const [showEditTask, setShowEditTask] = useState(false);
+  const [showEditMember, setShowEditMember] = useState(false);
   const [showQuickSetup, setShowQuickSetup] = useState(false);
   const [newTask, setNewTask] = useState({ title: '', status: 'pending', priority: 'medium', due_date: '' });
   const [newMember, setNewMember] = useState({ name: '', role: '', email: '' });
+  const [editingTask, setEditingTask] = useState(null);
+  const [editingMember, setEditingMember] = useState(null);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -141,6 +151,80 @@ const CommandCenter = ({ profile, summary, onRefresh }) => {
       toast.error('Failed to add team member');
     } finally {
       setSaving(false);
+    }
+  };
+
+  // Update task handler
+  const handleUpdateTask = async () => {
+    if (!editingTask?.title?.trim()) {
+      toast.error('Please enter a task title');
+      return;
+    }
+    setSaving(true);
+    try {
+      await axios.put(`${API}/tasks/${editingTask.task_id}`, editingTask);
+      toast.success('Task updated');
+      setShowEditTask(false);
+      setEditingTask(null);
+      fetchTasks();
+    } catch (error) {
+      toast.error('Failed to update task');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Delete task handler
+  const handleDeleteTask = async (taskId) => {
+    try {
+      await axios.delete(`${API}/tasks/${taskId}`);
+      toast.success('Task deleted');
+      fetchTasks();
+    } catch (error) {
+      toast.error('Failed to delete task');
+    }
+  };
+
+  // Mark task complete handler
+  const handleToggleTaskComplete = async (task) => {
+    try {
+      const newStatus = task.status === 'completed' ? 'pending' : 'completed';
+      await axios.put(`${API}/tasks/${task.task_id}`, { status: newStatus });
+      toast.success(newStatus === 'completed' ? 'Task completed!' : 'Task reopened');
+      fetchTasks();
+    } catch (error) {
+      toast.error('Failed to update task');
+    }
+  };
+
+  // Update team member handler
+  const handleUpdateTeamMember = async () => {
+    if (!editingMember?.name?.trim() || !editingMember?.role?.trim()) {
+      toast.error('Please enter name and role');
+      return;
+    }
+    setSaving(true);
+    try {
+      await axios.put(`${API}/team/${editingMember.member_id}`, editingMember);
+      toast.success('Team member updated');
+      setShowEditMember(false);
+      setEditingMember(null);
+      fetchTeam();
+    } catch (error) {
+      toast.error('Failed to update team member');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Delete team member handler
+  const handleDeleteTeamMember = async (memberId) => {
+    try {
+      await axios.delete(`${API}/team/${memberId}`);
+      toast.success('Team member removed');
+      fetchTeam();
+    } catch (error) {
+      toast.error('Failed to remove team member');
     }
   };
 
@@ -299,24 +383,50 @@ const CommandCenter = ({ profile, summary, onRefresh }) => {
                     <div
                       key={task.task_id}
                       data-testid={`task-${task.task_id}`}
-                      className="flex items-center justify-between p-4 rounded-lg bg-zinc-900/50 hover:bg-zinc-900 transition-colors group"
+                      className={`flex items-center justify-between p-4 rounded-lg bg-zinc-900/50 hover:bg-zinc-900 transition-colors group ${task.status === 'completed' ? 'opacity-60' : ''}`}
                     >
                       <div className="flex items-center gap-4">
-                        {getStatusBadge(task.status)}
-                        <div>
-                          <p className="text-sm font-medium text-zinc-100">{task.title}</p>
-                          <p className="text-xs text-zinc-500">ID: {task.task_id}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-4">
-                        <span className="text-xs text-zinc-500">Due: {task.due_date || 'No date'}</span>
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="opacity-0 group-hover:opacity-100 transition-opacity text-zinc-400 hover:text-zinc-100"
+                          onClick={() => handleToggleTaskComplete(task)}
+                          className={`h-6 w-6 rounded-full border ${task.status === 'completed' ? 'bg-emerald-500/20 border-emerald-500 text-emerald-500' : 'border-zinc-600 text-zinc-500 hover:border-zinc-400'}`}
                         >
-                          <MoreHorizontal className="w-4 h-4" />
+                          {task.status === 'completed' && <Check className="w-3 h-3" />}
                         </Button>
+                        {getStatusBadge(task.status)}
+                        <div>
+                          <p className={`text-sm font-medium ${task.status === 'completed' ? 'line-through text-zinc-500' : 'text-zinc-100'}`}>{task.title}</p>
+                          <p className="text-xs text-zinc-500">{task.priority} priority</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-zinc-500">{task.due_date || 'No date'}</span>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="opacity-0 group-hover:opacity-100 transition-opacity text-zinc-400 hover:text-zinc-100 h-8 w-8"
+                            >
+                              <MoreHorizontal className="w-4 h-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent className="bg-zinc-900 border-zinc-800">
+                            <DropdownMenuItem
+                              onClick={() => { setEditingTask(task); setShowEditTask(true); }}
+                              className="text-zinc-100 focus:bg-zinc-800"
+                            >
+                              <Edit2 className="w-4 h-4 mr-2" /> Edit
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => handleDeleteTask(task.task_id)}
+                              className="text-red-400 focus:bg-zinc-800"
+                            >
+                              <Trash2 className="w-4 h-4 mr-2" /> Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </div>
                     </div>
                   ))}
@@ -397,22 +507,49 @@ const CommandCenter = ({ profile, summary, onRefresh }) => {
             </CardHeader>
             <CardContent>
               {displayTeam.length > 0 ? (
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 gap-3">
                   {displayTeam.map((member) => (
                     <div
                       key={member.member_id}
                       data-testid={`team-member-${member.member_id}`}
-                      className="flex items-center gap-3 p-3 rounded-lg bg-zinc-900/50 hover:bg-zinc-900 transition-colors"
+                      className="flex items-center justify-between p-3 rounded-lg bg-zinc-900/50 hover:bg-zinc-900 transition-colors group"
                     >
-                      <Avatar className="w-10 h-10">
-                        <AvatarFallback className={`${getAvatarColor(member.avatar_color)} text-white text-sm font-medium`}>
-                          {member.name.split(" ").map(n => n[0]).join("")}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="overflow-hidden">
-                        <p className="text-sm font-medium text-zinc-100 truncate">{member.name}</p>
-                        <p className="text-xs text-zinc-500 truncate">{member.role}</p>
+                      <div className="flex items-center gap-3">
+                        <Avatar className="w-10 h-10">
+                          <AvatarFallback className={`${getAvatarColor(member.avatar_color)} text-white text-sm font-medium`}>
+                            {member.name.split(" ").map(n => n[0]).join("")}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="overflow-hidden">
+                          <p className="text-sm font-medium text-zinc-100 truncate">{member.name}</p>
+                          <p className="text-xs text-zinc-500 truncate">{member.role}</p>
+                        </div>
                       </div>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="opacity-0 group-hover:opacity-100 transition-opacity text-zinc-400 hover:text-zinc-100 h-8 w-8"
+                          >
+                            <MoreHorizontal className="w-4 h-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent className="bg-zinc-900 border-zinc-800">
+                          <DropdownMenuItem
+                            onClick={() => { setEditingMember(member); setShowEditMember(true); }}
+                            className="text-zinc-100 focus:bg-zinc-800"
+                          >
+                            <Edit2 className="w-4 h-4 mr-2" /> Edit
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => handleDeleteTeamMember(member.member_id)}
+                            className="text-red-400 focus:bg-zinc-800"
+                          >
+                            <Trash2 className="w-4 h-4 mr-2" /> Remove
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
                   ))}
                 </div>
@@ -569,6 +706,123 @@ const CommandCenter = ({ profile, summary, onRefresh }) => {
           onRefresh?.();
         }}
       />
+
+      {/* Edit Task Dialog */}
+      <Dialog open={showEditTask} onOpenChange={setShowEditTask}>
+        <DialogContent className="bg-zinc-900 border-zinc-800">
+          <DialogHeader>
+            <DialogTitle className="text-zinc-100">Edit Task</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Task Title *</Label>
+              <Input
+                value={editingTask?.title || ''}
+                onChange={(e) => setEditingTask(prev => ({ ...prev, title: e.target.value }))}
+                className="bg-zinc-800 border-zinc-700"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Status</Label>
+                <Select
+                  value={editingTask?.status || 'pending'}
+                  onValueChange={(value) => setEditingTask(prev => ({ ...prev, status: value }))}
+                >
+                  <SelectTrigger className="bg-zinc-800 border-zinc-700">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-zinc-800 border-zinc-700">
+                    <SelectItem value="pending">Pending</SelectItem>
+                    <SelectItem value="active">Active</SelectItem>
+                    <SelectItem value="urgent">Urgent</SelectItem>
+                    <SelectItem value="completed">Completed</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Priority</Label>
+                <Select
+                  value={editingTask?.priority || 'medium'}
+                  onValueChange={(value) => setEditingTask(prev => ({ ...prev, priority: value }))}
+                >
+                  <SelectTrigger className="bg-zinc-800 border-zinc-700">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-zinc-800 border-zinc-700">
+                    <SelectItem value="low">Low</SelectItem>
+                    <SelectItem value="medium">Medium</SelectItem>
+                    <SelectItem value="high">High</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Due Date</Label>
+              <Input
+                type="date"
+                value={editingTask?.due_date || ''}
+                onChange={(e) => setEditingTask(prev => ({ ...prev, due_date: e.target.value }))}
+                className="bg-zinc-800 border-zinc-700"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowEditTask(false)} className="border-zinc-700">
+              Cancel
+            </Button>
+            <Button onClick={handleUpdateTask} disabled={saving} className="bg-[#d4af37] text-zinc-900">
+              {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+              Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Team Member Dialog */}
+      <Dialog open={showEditMember} onOpenChange={setShowEditMember}>
+        <DialogContent className="bg-zinc-900 border-zinc-800">
+          <DialogHeader>
+            <DialogTitle className="text-zinc-100">Edit Team Member</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Name *</Label>
+              <Input
+                value={editingMember?.name || ''}
+                onChange={(e) => setEditingMember(prev => ({ ...prev, name: e.target.value }))}
+                className="bg-zinc-800 border-zinc-700"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Role *</Label>
+              <Input
+                value={editingMember?.role || ''}
+                onChange={(e) => setEditingMember(prev => ({ ...prev, role: e.target.value }))}
+                className="bg-zinc-800 border-zinc-700"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Email</Label>
+              <Input
+                type="email"
+                value={editingMember?.email || ''}
+                onChange={(e) => setEditingMember(prev => ({ ...prev, email: e.target.value }))}
+                className="bg-zinc-800 border-zinc-700"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowEditMember(false)} className="border-zinc-700">
+              Cancel
+            </Button>
+            <Button onClick={handleUpdateTeamMember} disabled={saving} className="bg-[#d4af37] text-zinc-900">
+              {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+              Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

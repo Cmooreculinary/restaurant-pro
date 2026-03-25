@@ -1,14 +1,40 @@
-import { Check } from "lucide-react";
+import { useState } from "react";
+import { Check, KeyRound, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { useNavigate } from "react-router-dom";
+import axios from "axios";
+import { toast } from "sonner";
+
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
 const Landing = () => {
   const navigate = useNavigate();
+  const [showSecretLogin, setShowSecretLogin] = useState(false);
+  const [secretCode, setSecretCode] = useState("");
+  const [loggingIn, setLoggingIn] = useState(false);
   
   const handleLogin = () => {
     // REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH
     const redirectUrl = window.location.origin + '/dashboard';
     window.location.href = `https://auth.emergentagent.com/?redirect=${encodeURIComponent(redirectUrl)}`;
+  };
+
+  const handleSecretLogin = async () => {
+    if (!secretCode.trim()) {
+      toast.error("Please enter access code");
+      return;
+    }
+    setLoggingIn(true);
+    try {
+      const response = await axios.post(`${BACKEND_URL}/api/auth/secret`, { code: secretCode });
+      toast.success(`Welcome! Session expires in ${response.data.expires_in_days} days`);
+      navigate("/dashboard");
+    } catch (error) {
+      toast.error("Invalid access code");
+    } finally {
+      setLoggingIn(false);
+    }
   };
 
   const features = [
@@ -137,6 +163,38 @@ const Landing = () => {
                 <span className="text-sm">{feature}</span>
               </div>
             ))}
+          </div>
+
+          {/* Secret Login */}
+          <div className="mt-8">
+            {!showSecretLogin ? (
+              <button
+                onClick={() => setShowSecretLogin(true)}
+                className="text-white/30 hover:text-white/50 transition-colors text-xs flex items-center gap-1"
+              >
+                <KeyRound className="w-3 h-3" />
+                Admin Access
+              </button>
+            ) : (
+              <div className="flex items-center gap-2 bg-black/30 backdrop-blur-sm rounded-lg p-2">
+                <Input
+                  type="password"
+                  value={secretCode}
+                  onChange={(e) => setSecretCode(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSecretLogin()}
+                  placeholder="Access code"
+                  className="w-40 h-8 text-sm bg-transparent border-white/20 text-white placeholder:text-white/40"
+                />
+                <Button
+                  onClick={handleSecretLogin}
+                  disabled={loggingIn}
+                  size="sm"
+                  className="h-8 bg-[#d4af37] text-zinc-900 hover:bg-[#c4a030]"
+                >
+                  {loggingIn ? <Loader2 className="w-4 h-4 animate-spin" /> : "Go"}
+                </Button>
+              </div>
+            )}
           </div>
         </div>
       </div>

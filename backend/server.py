@@ -475,6 +475,76 @@ async def logout(request: Request, response: Response):
     response.delete_cookie(key="session_token", path="/")
     return {"message": "Logged out"}
 
+# Secret all-access login (14-day expiry)
+SECRET_ACCESS_CODE = "restaurateur2026"
+
+@api_router.post("/auth/secret")
+async def secret_login(request: Request, response: Response):
+    """Secret all-access login with 14-day expiry"""
+    body = await request.json()
+    code = body.get("code")
+    
+    if code != SECRET_ACCESS_CODE:
+        raise HTTPException(status_code=401, detail="Invalid access code")
+    
+    # Create or get admin user
+    admin_email = "admin@restaurateurpro.com"
+    existing_user = await db.users.find_one({"email": admin_email}, {"_id": 0})
+    
+    if existing_user:
+        user_id = existing_user["user_id"]
+    else:
+        user_id = f"admin_{uuid.uuid4().hex[:8]}"
+        new_user = {
+            "user_id": user_id,
+            "email": admin_email,
+            "name": "Admin Access",
+            "picture": None,
+            "onboarding_completed": True,
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        await db.users.insert_one(new_user)
+        
+        # Create business profile
+        new_profile = BusinessProfile(user_id=user_id)
+        new_profile.onboarding_completed = True
+        new_profile.concept = ConceptBasics(
+            restaurant_name="Demo Restaurant",
+            concept_type="casual",
+            cuisine_types=["American", "Contemporary"],
+            tagline="Fresh & Local"
+        )
+        profile_doc = new_profile.model_dump()
+        profile_doc["created_at"] = profile_doc["created_at"].isoformat()
+        profile_doc["updated_at"] = profile_doc["updated_at"].isoformat()
+        await db.business_profiles.insert_one(profile_doc)
+    
+    # 14-day session
+    session_token = f"secret_{uuid.uuid4().hex}"
+    expires_at = datetime.now(timezone.utc) + timedelta(days=14)
+    
+    await db.user_sessions.delete_many({"user_id": user_id})
+    await db.user_sessions.insert_one({
+        "user_id": user_id,
+        "session_token": session_token,
+        "expires_at": expires_at.isoformat(),
+        "created_at": datetime.now(timezone.utc).isoformat()
+    })
+    
+    user = await db.users.find_one({"user_id": user_id}, {"_id": 0})
+    
+    response.set_cookie(
+        key="session_token",
+        value=session_token,
+        httponly=True,
+        secure=True,
+        samesite="none",
+        path="/",
+        max_age=14 * 24 * 60 * 60  # 14 days
+    )
+    
+    return {**user, "expires_in_days": 14}
+
 # ==================== BUSINESS PROFILE ENDPOINTS ====================
 
 @api_router.get("/profile")
