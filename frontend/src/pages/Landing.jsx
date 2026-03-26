@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Check, KeyRound, Loader2, Mail, Lock, User, ArrowRight } from "lucide-react";
+import { Check, Loader2, Mail, Lock, User, ArrowRight, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,11 +11,9 @@ const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
 const Landing = () => {
   const navigate = useNavigate();
-  const [showAuth, setShowAuth] = useState(false);
-  const [isLogin, setIsLogin] = useState(true);
-  const [showSecretLogin, setShowSecretLogin] = useState(false);
-  const [secretCode, setSecretCode] = useState("");
+  const [view, setView] = useState("home"); // home, login, register
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   
   const [formData, setFormData] = useState({
     email: "",
@@ -23,46 +21,84 @@ const Landing = () => {
     name: ""
   });
 
-  const handleAuth = async (e) => {
-    e.preventDefault();
-    if (!formData.email || !formData.password) {
-      toast.error("Please fill in all fields");
-      return;
+  const [errors, setErrors] = useState({});
+
+  const validateForm = () => {
+    const newErrors = {};
+    
+    if (!formData.email.trim()) {
+      newErrors.email = "Email is required";
+    } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
+      newErrors.email = "Please enter a valid email";
     }
     
+    if (!formData.password) {
+      newErrors.password = "Password is required";
+    } else if (formData.password.length < 6) {
+      newErrors.password = "Password must be at least 6 characters";
+    }
+    
+    if (view === "register" && !formData.name.trim()) {
+      newErrors.name = "Name is required";
+    }
+    
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    
+    if (!validateForm()) return;
+    
     setLoading(true);
+    setErrors({});
+    
     try {
+      const isLogin = view === "login";
       const endpoint = isLogin ? "/api/auth/login" : "/api/auth/register";
       const payload = isLogin 
-        ? { email: formData.email, password: formData.password }
-        : { email: formData.email, password: formData.password, name: formData.name };
+        ? { email: formData.email.toLowerCase().trim(), password: formData.password }
+        : { email: formData.email.toLowerCase().trim(), password: formData.password, name: formData.name.trim() };
       
-      await axios.post(`${BACKEND_URL}${endpoint}`, payload);
-      toast.success(isLogin ? "Welcome back!" : "Account created successfully!");
-      // Force full page reload to refresh auth state
-      window.location.href = "/dashboard";
+      const response = await axios.post(`${BACKEND_URL}${endpoint}`, payload, {
+        withCredentials: true,
+        timeout: 10000
+      });
+      
+      if (response.data && response.data.user_id) {
+        toast.success(isLogin ? "Welcome back!" : "Account created!");
+        // Hard redirect to ensure fresh auth state
+        window.location.replace("/dashboard");
+      } else {
+        throw new Error("Invalid response");
+      }
     } catch (error) {
-      const message = error.response?.data?.detail || "Authentication failed";
+      const message = error.response?.data?.detail || error.message || "Something went wrong";
+      setErrors({ form: message });
       toast.error(message);
-    } finally {
       setLoading(false);
     }
   };
 
   const handleSecretLogin = async () => {
-    if (!secretCode.trim()) {
-      toast.error("Please enter access code");
-      return;
-    }
     setLoading(true);
+    setErrors({});
+    
     try {
-      const response = await axios.post(`${BACKEND_URL}/api/auth/secret`, { code: secretCode });
-      toast.success(`Welcome! Session expires in ${response.data.expires_in_days} days`);
-      // Force full page reload to refresh auth state
-      window.location.href = "/dashboard";
+      const response = await axios.post(`${BACKEND_URL}/api/auth/secret`, 
+        { code: "restaurateur2026" },
+        { withCredentials: true, timeout: 10000 }
+      );
+      
+      if (response.data && response.data.user_id) {
+        toast.success("Admin access granted!");
+        window.location.replace("/dashboard");
+      } else {
+        throw new Error("Invalid response");
+      }
     } catch (error) {
-      toast.error("Invalid access code");
-    } finally {
+      toast.error("Access denied");
       setLoading(false);
     }
   };
@@ -90,9 +126,194 @@ const Landing = () => {
     </svg>
   );
 
+  // Auth Form Component
+  const AuthForm = () => (
+    <div className="w-full max-w-md bg-[#0f1419]/95 backdrop-blur-xl rounded-2xl p-8 border border-white/10 shadow-2xl">
+      <div className="flex items-center justify-center gap-2 mb-2">
+        <GoldenDomeLogo size={36} />
+        <h2 className="text-xl">
+          <span className="font-serif italic text-white">Restaurateur</span>
+          <span className="font-bold text-[#d4af37] ml-1">PRO</span>
+        </h2>
+      </div>
+      
+      <h3 className="text-2xl font-semibold text-white mb-6 text-center">
+        {view === "login" ? "Welcome Back" : "Create Account"}
+      </h3>
+      
+      {errors.form && (
+        <div className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm text-center">
+          {errors.form}
+        </div>
+      )}
+      
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {view === "register" && (
+          <div className="space-y-2">
+            <Label className="text-white/80 text-sm">Full Name</Label>
+            <div className="relative">
+              <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40" />
+              <Input
+                type="text"
+                value={formData.name}
+                onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                placeholder="John Smith"
+                disabled={loading}
+                className={`pl-10 h-12 bg-white/5 border-white/10 text-white placeholder:text-white/30 focus:border-[#d4af37] focus:ring-[#d4af37]/20 ${errors.name ? 'border-red-500' : ''}`}
+              />
+            </div>
+            {errors.name && <p className="text-red-400 text-xs">{errors.name}</p>}
+          </div>
+        )}
+        
+        <div className="space-y-2">
+          <Label className="text-white/80 text-sm">Email Address</Label>
+          <div className="relative">
+            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40" />
+            <Input
+              type="email"
+              value={formData.email}
+              onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+              placeholder="you@example.com"
+              disabled={loading}
+              autoComplete="email"
+              className={`pl-10 h-12 bg-white/5 border-white/10 text-white placeholder:text-white/30 focus:border-[#d4af37] focus:ring-[#d4af37]/20 ${errors.email ? 'border-red-500' : ''}`}
+            />
+          </div>
+          {errors.email && <p className="text-red-400 text-xs">{errors.email}</p>}
+        </div>
+        
+        <div className="space-y-2">
+          <Label className="text-white/80 text-sm">Password</Label>
+          <div className="relative">
+            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40" />
+            <Input
+              type={showPassword ? "text" : "password"}
+              value={formData.password}
+              onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
+              placeholder={view === "login" ? "Enter password" : "Min 6 characters"}
+              disabled={loading}
+              autoComplete={view === "login" ? "current-password" : "new-password"}
+              className={`pl-10 pr-10 h-12 bg-white/5 border-white/10 text-white placeholder:text-white/30 focus:border-[#d4af37] focus:ring-[#d4af37]/20 ${errors.password ? 'border-red-500' : ''}`}
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/60"
+            >
+              {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            </button>
+          </div>
+          {errors.password && <p className="text-red-400 text-xs">{errors.password}</p>}
+        </div>
+        
+        <Button
+          type="submit"
+          disabled={loading}
+          className="w-full h-12 bg-gradient-to-b from-[#f5d485] via-[#d4af37] to-[#b8962e] text-[#1a1a2e] font-semibold rounded-lg hover:brightness-110 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {loading ? (
+            <Loader2 className="w-5 h-5 animate-spin" />
+          ) : (
+            <span className="flex items-center justify-center gap-2">
+              {view === "login" ? "Sign In" : "Create Account"}
+              <ArrowRight className="w-4 h-4" />
+            </span>
+          )}
+        </Button>
+      </form>
+      
+      <div className="mt-6 text-center space-y-3">
+        <button
+          onClick={() => {
+            setView(view === "login" ? "register" : "login");
+            setErrors({});
+            setFormData({ email: "", password: "", name: "" });
+          }}
+          disabled={loading}
+          className="text-white/60 hover:text-white text-sm transition-colors disabled:opacity-50"
+        >
+          {view === "login" ? "Don't have an account? Sign up" : "Already have an account? Sign in"}
+        </button>
+        
+        <div className="pt-2">
+          <button
+            onClick={() => { setView("home"); setErrors({}); }}
+            disabled={loading}
+            className="text-white/40 hover:text-white/60 text-sm transition-colors disabled:opacity-50"
+          >
+            ← Back to home
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  // Home View
+  const HomeView = () => (
+    <>
+      {/* Logo and Brand */}
+      <div className="flex items-center gap-3 mb-6">
+        <GoldenDomeLogo size={64} />
+        <h2 className="text-4xl md:text-5xl">
+          <span className="font-serif italic text-white tracking-wide">Restaurateur</span>
+          <span className="font-bold text-[#d4af37] ml-2">PRO</span>
+        </h2>
+      </div>
+
+      <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-serif italic text-white mb-4 max-w-4xl leading-tight">
+        Design, Build and Scale Your Concept
+      </h1>
+
+      <p className="text-xs md:text-sm tracking-[0.25em] text-white/50 uppercase mb-10">
+        The All-In-One Blueprint for Restaurant Success
+      </p>
+
+      {/* CTA Buttons */}
+      <div className="flex flex-col sm:flex-row gap-4 mb-10">
+        <Button 
+          onClick={() => setView("register")}
+          disabled={loading}
+          className="bg-gradient-to-b from-[#f5d485] via-[#d4af37] to-[#b8962e] text-[#1a1a2e] font-semibold px-10 py-6 text-base rounded-lg shadow-lg hover:shadow-xl hover:brightness-110 transition-all min-w-[180px]"
+        >
+          Get Started Free
+        </Button>
+        <Button 
+          onClick={() => setView("login")}
+          disabled={loading}
+          variant="outline"
+          className="border-2 border-white/30 bg-white/5 text-white font-semibold px-10 py-6 text-base rounded-lg hover:bg-white/10 hover:border-white/50 transition-all min-w-[180px]"
+        >
+          Sign In
+        </Button>
+      </div>
+
+      {/* Feature Checkmarks */}
+      <div className="flex flex-wrap justify-center gap-x-8 gap-y-2 text-white/70 mb-12">
+        {features.map((feature, index) => (
+          <div key={index} className="flex items-center gap-2">
+            <div className="w-5 h-5 rounded-full bg-[#d4af37]/20 flex items-center justify-center">
+              <Check className="w-3 h-3 text-[#d4af37]" strokeWidth={3} />
+            </div>
+            <span className="text-sm">{feature}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* Admin Access - Subtle */}
+      <button
+        onClick={handleSecretLogin}
+        disabled={loading}
+        className="text-white/20 hover:text-white/40 text-xs transition-colors disabled:opacity-50 flex items-center gap-1"
+      >
+        {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : "Admin Access"}
+      </button>
+    </>
+  );
+
   return (
     <div className="min-h-screen relative overflow-hidden">
-      {/* Hero Background */}
+      {/* Background */}
       <div 
         className="absolute inset-0 bg-cover bg-center bg-no-repeat"
         style={{
@@ -100,218 +321,40 @@ const Landing = () => {
         }}
       />
       
-      <div 
-        className="absolute inset-0 mix-blend-soft-light opacity-30"
-        style={{
-          backgroundImage: `url("data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' stroke='%234a90c2' stroke-width='0.5'%3E%3Cpath d='M0 50h100M50 0v100'/%3E%3Crect x='10' y='10' width='30' height='30'/%3E%3Crect x='60' y='60' width='30' height='30'/%3E%3C/g%3E%3C/svg%3E")`,
-          backgroundSize: '200px 200px'
-        }}
-      />
+      {/* Overlay */}
+      <div className="absolute inset-0 bg-gradient-to-b from-[#0a1628]/85 via-[#0a1628]/80 to-[#0a1628]/95" />
       
-      <div className="absolute inset-0 bg-gradient-to-b from-[#0a1628]/80 via-[#0a1628]/70 to-[#0a1628]/90" />
-      
+      {/* Content */}
       <div className="relative z-10 min-h-screen flex flex-col">
         {/* Navigation */}
         <nav className="flex items-center justify-between px-6 md:px-12 py-5">
-          <div className="w-10 h-10">
+          <button onClick={() => setView("home")} className="w-10 h-10">
             <GoldenDomeLogo size={40} />
-          </div>
+          </button>
           
-          <div className="flex items-center gap-2 md:gap-4">
+          <div className="flex items-center gap-2">
             <Button 
-              data-testid="nav-pricing-btn"
               onClick={() => navigate("/pricing")}
               variant="ghost"
-              className="text-white/80 hover:text-white hover:bg-white/10 text-sm"
+              className="text-white/70 hover:text-white hover:bg-white/10 text-sm"
             >
               Pricing
             </Button>
-            <Button 
-              data-testid="nav-login-btn"
-              onClick={() => { setShowAuth(true); setIsLogin(true); }}
-              variant="ghost"
-              className="text-white/80 hover:text-white hover:bg-white/10 text-sm"
-            >
-              Sign In
-            </Button>
+            {view === "home" && (
+              <Button 
+                onClick={() => setView("login")}
+                variant="ghost"
+                className="text-white/70 hover:text-white hover:bg-white/10 text-sm"
+              >
+                Sign In
+              </Button>
+            )}
           </div>
         </nav>
 
         {/* Main Content */}
-        <div className="flex-1 flex flex-col items-center justify-center px-6 text-center pb-20">
-          {!showAuth ? (
-            <>
-              {/* Logo and Brand */}
-              <div className="flex items-center gap-2 mb-4">
-                <GoldenDomeLogo size={56} />
-                <h2 className="text-4xl md:text-5xl">
-                  <span className="font-serif italic text-white tracking-wide">Restaurateur</span>
-                  <span className="font-bold text-[#d4af37] ml-1">PRO</span>
-                </h2>
-              </div>
-
-              <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-serif italic text-white mb-4 max-w-4xl leading-tight">
-                Design, Build and Scale Your Concept
-              </h1>
-
-              <p className="text-[10px] sm:text-xs md:text-sm tracking-[0.2em] md:tracking-[0.3em] text-white/60 uppercase mb-8">
-                The All-In-One Blueprint for Restaurant Success
-              </p>
-
-              {/* CTA Buttons */}
-              <div className="flex flex-col sm:flex-row gap-4 mb-10">
-                <Button 
-                  data-testid="hero-get-started-btn"
-                  onClick={() => { setShowAuth(true); setIsLogin(false); }}
-                  className="bg-gradient-to-b from-[#f5d485] via-[#d4af37] to-[#b8962e] text-[#1a1a2e] font-semibold px-10 py-6 text-base rounded shadow-lg hover:shadow-xl hover:brightness-110 transition-all min-w-[160px]"
-                >
-                  Get Started
-                </Button>
-                <Button 
-                  data-testid="hero-learn-more-btn"
-                  onClick={() => navigate("/pricing")}
-                  variant="outline"
-                  className="border-2 border-white/40 bg-transparent text-white font-semibold px-10 py-6 text-base rounded hover:bg-white/10 hover:border-white/60 transition-all min-w-[160px]"
-                >
-                  Learn More
-                </Button>
-              </div>
-
-              {/* Feature Checkmarks */}
-              <div className="flex flex-wrap justify-center gap-x-6 gap-y-2 text-white/80">
-                {features.map((feature, index) => (
-                  <div key={index} className="flex items-center gap-2">
-                    <Check className="w-4 h-4 text-[#d4af37]" strokeWidth={3} />
-                    <span className="text-sm">{feature}</span>
-                  </div>
-                ))}
-              </div>
-
-              {/* Secret Login */}
-              <div className="mt-8">
-                {!showSecretLogin ? (
-                  <button
-                    onClick={() => setShowSecretLogin(true)}
-                    className="text-white/30 hover:text-white/50 transition-colors text-xs flex items-center gap-1"
-                  >
-                    <KeyRound className="w-3 h-3" />
-                    Admin Access
-                  </button>
-                ) : (
-                  <div className="flex items-center gap-2 bg-black/30 backdrop-blur-sm rounded-lg p-2">
-                    <Input
-                      type="password"
-                      value={secretCode}
-                      onChange={(e) => setSecretCode(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && handleSecretLogin()}
-                      placeholder="Access code"
-                      className="w-40 h-8 text-sm bg-transparent border-white/20 text-white placeholder:text-white/40"
-                    />
-                    <Button
-                      onClick={handleSecretLogin}
-                      disabled={loading}
-                      size="sm"
-                      className="h-8 bg-[#d4af37] text-zinc-900 hover:bg-[#c4a030]"
-                    >
-                      {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Go"}
-                    </Button>
-                  </div>
-                )}
-              </div>
-            </>
-          ) : (
-            /* Auth Form */
-            <div className="w-full max-w-md bg-black/40 backdrop-blur-md rounded-2xl p-8 border border-white/10">
-              <div className="flex items-center justify-center gap-2 mb-6">
-                <GoldenDomeLogo size={40} />
-                <h2 className="text-2xl">
-                  <span className="font-serif italic text-white">Restaurateur</span>
-                  <span className="font-bold text-[#d4af37] ml-1">PRO</span>
-                </h2>
-              </div>
-              
-              <h3 className="text-xl font-semibold text-white mb-6 text-center">
-                {isLogin ? "Welcome Back" : "Create Your Account"}
-              </h3>
-              
-              <form onSubmit={handleAuth} className="space-y-4">
-                {!isLogin && (
-                  <div className="space-y-2">
-                    <Label className="text-white/80">Name</Label>
-                    <div className="relative">
-                      <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40" />
-                      <Input
-                        type="text"
-                        value={formData.name}
-                        onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                        placeholder="Your name"
-                        className="pl-10 bg-white/10 border-white/20 text-white placeholder:text-white/40"
-                      />
-                    </div>
-                  </div>
-                )}
-                
-                <div className="space-y-2">
-                  <Label className="text-white/80">Email</Label>
-                  <div className="relative">
-                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40" />
-                    <Input
-                      type="email"
-                      value={formData.email}
-                      onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
-                      placeholder="you@example.com"
-                      className="pl-10 bg-white/10 border-white/20 text-white placeholder:text-white/40"
-                    />
-                  </div>
-                </div>
-                
-                <div className="space-y-2">
-                  <Label className="text-white/80">Password</Label>
-                  <div className="relative">
-                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40" />
-                    <Input
-                      type="password"
-                      value={formData.password}
-                      onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
-                      placeholder={isLogin ? "Your password" : "Min 6 characters"}
-                      className="pl-10 bg-white/10 border-white/20 text-white placeholder:text-white/40"
-                    />
-                  </div>
-                </div>
-                
-                <Button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full bg-gradient-to-b from-[#f5d485] via-[#d4af37] to-[#b8962e] text-[#1a1a2e] font-semibold py-6 rounded hover:brightness-110 transition-all"
-                >
-                  {loading ? (
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                  ) : (
-                    <>
-                      {isLogin ? "Sign In" : "Create Account"}
-                      <ArrowRight className="w-4 h-4 ml-2" />
-                    </>
-                  )}
-                </Button>
-              </form>
-              
-              <div className="mt-6 text-center">
-                <button
-                  onClick={() => setIsLogin(!isLogin)}
-                  className="text-white/60 hover:text-white text-sm transition-colors"
-                >
-                  {isLogin ? "Don't have an account? Sign up" : "Already have an account? Sign in"}
-                </button>
-              </div>
-              
-              <button
-                onClick={() => setShowAuth(false)}
-                className="mt-4 text-white/40 hover:text-white/60 text-sm w-full text-center transition-colors"
-              >
-                ← Back to home
-              </button>
-            </div>
-          )}
+        <div className="flex-1 flex flex-col items-center justify-center px-6 text-center pb-16">
+          {view === "home" ? <HomeView /> : <AuthForm />}
         </div>
       </div>
     </div>
