@@ -22,8 +22,9 @@ services:
   - type: web
     name: restaurant-pro-frontend
     runtime: static
-    buildCommand: cd frontend && npm install && npm run build
-    staticPublishPath: frontend/build
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: ./build
     routes:
       - type: rewrite
         source: /*
