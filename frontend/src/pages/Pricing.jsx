@@ -122,9 +122,7 @@ const Pricing = ({ user }) => {
 
   const handleSubscribe = async (planId) => {
     if (!user) {
-      // Redirect to login
-      const redirectUrl = window.location.origin + '/pricing';
-      window.location.href = `https://auth.emergentagent.com/?redirect=${encodeURIComponent(redirectUrl)}`;
+      window.location.href = '/';
       return;
     }
 
@@ -148,8 +146,7 @@ const Pricing = ({ user }) => {
   };
 
   const handleLogin = () => {
-    const redirectUrl = window.location.origin + '/pricing';
-    window.location.href = `https://auth.emergentagent.com/?redirect=${encodeURIComponent(redirectUrl)}`;
+    window.location.href = '/';
   };
 
   if (loading) {

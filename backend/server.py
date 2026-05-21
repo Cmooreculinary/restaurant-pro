@@ -9,8 +9,11 @@ from pathlib import Path
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 import uuid
+import json
 from datetime import datetime, timezone, timedelta
 import httpx
+import stripe
+import anthropic
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -1132,16 +1135,13 @@ async def mark_notifications_read(user: User = Depends(get_current_user)):
 
 @api_router.post("/ai/analyze")
 async def ai_analysis(data: AIAnalysisRequest, user: User = Depends(get_current_user)):
-    """AI-powered analysis using GPT-5.2"""
-    from emergentintegrations.llm.chat import LlmChat, UserMessage
-    
-    api_key = os.environ.get("EMERGENT_LLM_KEY")
+    """AI-powered analysis"""
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
         raise HTTPException(status_code=500, detail="AI service not configured")
-    
-    # Get business profile for context
+
     profile = await get_user_profile(user)
-    
+
     system_messages = {
         "lease": f"You are an expert restaurant lease analyst. The restaurant is called '{profile.get('concept', {}).get('restaurant_name', 'the restaurant')}', a {profile.get('concept', {}).get('concept_type', '')} concept. Analyze lease terms and identify potential issues, favorable clauses, and negotiation points. Provide actionable recommendations.",
         "menu": f"You are a restaurant menu engineering expert. The restaurant is '{profile.get('concept', {}).get('restaurant_name', 'the restaurant')}', targeting a {profile.get('menu', {}).get('price_range', '')} price point. Analyze menu items for profitability, pricing strategy, and cost optimization. Provide specific recommendations.",
@@ -1149,51 +1149,45 @@ async def ai_analysis(data: AIAnalysisRequest, user: User = Depends(get_current_
         "site": f"You are a restaurant site analysis expert. The concept is a {profile.get('concept', {}).get('concept_type', '')} restaurant. Evaluate location potential based on demographics, foot traffic, competition, and market conditions.",
         "business": f"You are a restaurant business consultant. The restaurant is '{profile.get('concept', {}).get('restaurant_name', 'the restaurant')}' with a total budget of ${profile.get('financial', {}).get('total_budget', 0):,.0f}. Provide strategic advice."
     }
-    
+
     system_message = system_messages.get(data.analysis_type, "You are a helpful restaurant business assistant.")
-    
-    chat = LlmChat(
-        api_key=api_key,
-        session_id=f"analysis_{user.user_id}",
-        system_message=system_message
-    ).with_model("openai", "gpt-5.2")
-    
-    user_message = UserMessage(text=data.content)
-    response = await chat.send_message(user_message)
-    
-    return {"analysis": response, "type": data.analysis_type}
+
+    client = anthropic.AsyncAnthropic(api_key=api_key)
+    message = await client.messages.create(
+        model="claude-sonnet-4-5-20250929",
+        max_tokens=1024,
+        system=system_message,
+        messages=[{"role": "user", "content": data.content}],
+    )
+    return {"analysis": message.content[0].text.strip(), "type": data.analysis_type}
 
 @api_router.post("/ai/cost-calculator")
 async def ai_cost_calculator(data: dict, user: User = Depends(get_current_user)):
     """AI-powered recipe cost calculator"""
-    from emergentintegrations.llm.chat import LlmChat, UserMessage
-    
-    api_key = os.environ.get("EMERGENT_LLM_KEY")
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
         raise HTTPException(status_code=500, detail="AI service not configured")
-    
+
     profile = await get_user_profile(user)
     target_food_cost = profile.get("financial", {}).get("target_food_cost_percent", 30)
-    
-    chat = LlmChat(
-        api_key=api_key,
-        session_id=f"cost_calc_{user.user_id}",
-        system_message=f"""You are a restaurant cost calculator. The target food cost percentage is {target_food_cost}%. Given ingredient costs and quantities, calculate:
+    ingredients = data.get("ingredients", "")
+    servings = data.get("servings", 1)
+
+    system = f"""You are a restaurant cost calculator. The target food cost percentage is {target_food_cost}%. Given ingredient costs and quantities, calculate:
 1. Total recipe cost
 2. Cost per serving
 3. Suggested menu price (targeting {target_food_cost}% food cost)
 4. Profit margin analysis
 Respond in a structured format."""
-    ).with_model("openai", "gpt-5.2")
-    
-    ingredients = data.get("ingredients", "")
-    servings = data.get("servings", 1)
-    
-    prompt = f"Calculate costs for this recipe:\n{ingredients}\nNumber of servings: {servings}"
-    user_message = UserMessage(text=prompt)
-    response = await chat.send_message(user_message)
-    
-    return {"calculation": response}
+
+    client = anthropic.AsyncAnthropic(api_key=api_key)
+    message = await client.messages.create(
+        model="claude-sonnet-4-5-20250929",
+        max_tokens=1024,
+        system=system,
+        messages=[{"role": "user", "content": f"Calculate costs for this recipe:\n{ingredients}\nNumber of servings: {servings}"}],
+    )
+    return {"calculation": message.content[0].text.strip()}
 
 # ==================== SITE DEMOGRAPHICS ====================
 
@@ -1253,8 +1247,6 @@ async def health():
     return {"status": "healthy", "timestamp": datetime.now(timezone.utc).isoformat()}
 
 # ==================== STRIPE SUBSCRIPTIONS ====================
-
-from emergentintegrations.payments.stripe.checkout import StripeCheckout, CheckoutSessionResponse, CheckoutStatusResponse, CheckoutSessionRequest
 
 SUBSCRIPTION_PLANS = {
     "single_unit": {
@@ -1317,35 +1309,30 @@ async def create_subscription_checkout(data: SubscriptionRequest, request: Reque
     stripe_api_key = os.environ.get("STRIPE_API_KEY")
     if not stripe_api_key:
         raise HTTPException(status_code=500, detail="Stripe not configured")
-    
+
+    stripe.api_key = stripe_api_key
     success_url = f"{data.origin_url}/subscription/success?session_id={{CHECKOUT_SESSION_ID}}"
     cancel_url = f"{data.origin_url}/pricing"
-    
-    host_url = str(request.base_url).rstrip('/')
-    webhook_url = f"{host_url}/api/webhook/stripe"
-    stripe_checkout = StripeCheckout(api_key=stripe_api_key, webhook_url=webhook_url)
-    
-    metadata = {
-        "user_id": user.user_id,
-        "user_email": user.email,
-        "plan_id": data.plan_id,
-        "plan_name": plan["name"]
-    }
-    
+
     try:
-        checkout_request = CheckoutSessionRequest(
-            stripe_price_id=plan["price_id"],
-            quantity=1,
+        session = stripe.checkout.Session.create(
+            mode="subscription",
+            payment_method_types=["card"],
+            line_items=[{"price": plan["price_id"], "quantity": 1}],
             success_url=success_url,
             cancel_url=cancel_url,
-            metadata=metadata
+            customer_email=user.email,
+            metadata={
+                "user_id": user.user_id,
+                "user_email": user.email,
+                "plan_id": data.plan_id,
+                "plan_name": plan["name"],
+            },
         )
-        
-        session: CheckoutSessionResponse = await stripe_checkout.create_checkout_session(checkout_request)
-        
-        transaction = {
+
+        await db.payment_transactions.insert_one({
             "transaction_id": f"txn_{uuid.uuid4().hex[:12]}",
-            "session_id": session.session_id,
+            "session_id": session.id,
             "user_id": user.user_id,
             "user_email": user.email,
             "plan_id": data.plan_id,
@@ -1353,13 +1340,12 @@ async def create_subscription_checkout(data: SubscriptionRequest, request: Reque
             "amount": plan["price"],
             "currency": "usd",
             "payment_status": "pending",
-            "created_at": datetime.now(timezone.utc).isoformat()
-        }
-        await db.payment_transactions.insert_one(transaction)
-        
-        return {"url": session.url, "session_id": session.session_id}
-        
-    except Exception as e:
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+
+        return {"url": session.url, "session_id": session.id}
+
+    except stripe.error.StripeError as e:
         logger.error(f"Stripe checkout error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -1369,42 +1355,42 @@ async def get_subscription_status(session_id: str, user: User = Depends(get_curr
     stripe_api_key = os.environ.get("STRIPE_API_KEY")
     if not stripe_api_key:
         raise HTTPException(status_code=500, detail="Stripe not configured")
-    
-    stripe_checkout = StripeCheckout(api_key=stripe_api_key, webhook_url="")
-    
+
+    stripe.api_key = stripe_api_key
+
     try:
-        status: CheckoutStatusResponse = await stripe_checkout.get_checkout_status(session_id)
-        
-        update_data = {
-            "payment_status": status.payment_status,
-            "status": status.status,
-            "updated_at": datetime.now(timezone.utc).isoformat()
-        }
-        
+        session = stripe.checkout.Session.retrieve(session_id)
+        payment_status = session.payment_status
+        status_val = session.status
+
         existing = await db.payment_transactions.find_one({"session_id": session_id}, {"_id": 0})
-        
-        if existing and existing.get("payment_status") != "paid" and status.payment_status == "paid":
+
+        if existing and existing.get("payment_status") != "paid" and payment_status == "paid":
             await db.users.update_one(
                 {"user_id": user.user_id},
                 {"$set": {
                     "subscription_plan": existing.get("plan_id"),
                     "subscription_status": "active",
-                    "subscription_updated_at": datetime.now(timezone.utc).isoformat()
+                    "subscription_updated_at": datetime.now(timezone.utc).isoformat(),
                 }}
             )
-        
+
         await db.payment_transactions.update_one(
             {"session_id": session_id},
-            {"$set": update_data}
+            {"$set": {
+                "payment_status": payment_status,
+                "status": status_val,
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            }}
         )
-        
+
         return {
-            "status": status.status,
-            "payment_status": status.payment_status,
-            "amount_total": status.amount_total,
-            "currency": status.currency
+            "status": status_val,
+            "payment_status": payment_status,
+            "amount_total": session.amount_total,
+            "currency": session.currency,
         }
-        
+
     except Exception as e:
         logger.error(f"Status check error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -1425,32 +1411,37 @@ async def stripe_webhook(request: Request):
     stripe_api_key = os.environ.get("STRIPE_API_KEY")
     if not stripe_api_key:
         raise HTTPException(status_code=500, detail="Stripe not configured")
-    
+
+    stripe.api_key = stripe_api_key
+    webhook_secret = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
     body = await request.body()
-    signature = request.headers.get("Stripe-Signature")
-    
-    host_url = str(request.base_url).rstrip('/')
-    webhook_url = f"{host_url}/api/webhook/stripe"
-    stripe_checkout = StripeCheckout(api_key=stripe_api_key, webhook_url=webhook_url)
-    
+    signature = request.headers.get("Stripe-Signature", "")
+
     try:
-        webhook_response = await stripe_checkout.handle_webhook(body, signature)
-        
-        if webhook_response.session_id:
+        if webhook_secret and signature:
+            event = stripe.Webhook.construct_event(body, signature, webhook_secret)
+        else:
+            event = json.loads(body)
+    except (stripe.error.SignatureVerificationError, ValueError) as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    event_type = event["type"]
+    data = event["data"]["object"]
+
+    if event_type == "checkout.session.completed":
+        session_id = data.get("id")
+        payment_status = data.get("payment_status", "paid")
+        if session_id:
             await db.payment_transactions.update_one(
-                {"session_id": webhook_response.session_id},
+                {"session_id": session_id},
                 {"$set": {
-                    "payment_status": webhook_response.payment_status,
-                    "webhook_event": webhook_response.event_type,
-                    "updated_at": datetime.now(timezone.utc).isoformat()
+                    "payment_status": payment_status,
+                    "webhook_event": event_type,
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
                 }}
             )
-        
-        return {"received": True}
-        
-    except Exception as e:
-        logger.error(f"Webhook error: {e}")
-        raise HTTPException(status_code=400, detail=str(e))
+
+    return {"received": True}
 
 # ==================== MIDDLEWARE & STARTUP ====================
 
