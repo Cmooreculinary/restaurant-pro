@@ -24,7 +24,7 @@ services:
     runtime: static
     rootDir: frontend
     buildCommand: npm install && npm run build
-    publishPath: build
+    staticPublishPath: ./build
     envVars:
       - key: REACT_APP_BACKEND_URL
         sync: false
