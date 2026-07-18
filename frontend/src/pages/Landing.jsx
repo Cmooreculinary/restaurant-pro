@@ -34,8 +34,8 @@ const Landing = () => {
     
     if (!formData.password) {
       newErrors.password = "Password is required";
-    } else if (formData.password.length < 6) {
-      newErrors.password = "Password must be at least 6 characters";
+    } else if (formData.password.length < 12) {
+      newErrors.password = "Password must be at least 12 characters";
     }
     
     if (view === "register" && !formData.name.trim()) {
@@ -77,28 +77,6 @@ const Landing = () => {
       const message = error.response?.data?.detail || error.message || "Something went wrong";
       setErrors({ form: message });
       toast.error(message);
-      setLoading(false);
-    }
-  };
-
-  const handleSecretLogin = async () => {
-    setLoading(true);
-    setErrors({});
-    
-    try {
-      const response = await axios.post(`${BACKEND_URL}/api/auth/secret`, 
-        { code: "restaurateur2026" },
-        { withCredentials: true, timeout: 10000 }
-      );
-      
-      if (response.data && response.data.user_id) {
-        toast.success("Admin access granted!");
-        window.location.replace("/dashboard");
-      } else {
-        throw new Error("Invalid response");
-      }
-    } catch (error) {
-      toast.error("Access denied");
       setLoading(false);
     }
   };
@@ -191,7 +169,7 @@ const Landing = () => {
               type={showPassword ? "text" : "password"}
               value={formData.password}
               onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
-              placeholder={view === "login" ? "Enter password" : "Min 6 characters"}
+              placeholder={view === "login" ? "Enter password" : "Minimum 12 characters"}
               disabled={loading}
               autoComplete={view === "login" ? "current-password" : "new-password"}
               className={`pl-10 pr-10 h-12 bg-white/5 border-white/10 text-white placeholder:text-white/30 focus:border-[#d4af37] focus:ring-[#d4af37]/20 ${errors.password ? 'border-red-500' : ''}`}
@@ -300,14 +278,6 @@ const Landing = () => {
         ))}
       </div>
 
-      {/* Admin Access - Subtle */}
-      <button
-        onClick={handleSecretLogin}
-        disabled={loading}
-        className="text-white/20 hover:text-white/40 text-xs transition-colors disabled:opacity-50 flex items-center gap-1"
-      >
-        {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : "Admin Access"}
-      </button>
     </>
   );
 

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import {
@@ -32,15 +32,7 @@ const SiteStrategist = ({ profile }) => {
   const [analyzing, setAnalyzing] = useState(false);
   const [leaseAnalysis, setLeaseAnalysis] = useState(null);
 
-  useEffect(() => {
-    // Use location from profile if available
-    if (profile?.location?.coordinates?.lat && profile?.location?.coordinates?.lng) {
-      setMapCenter([profile.location.coordinates.lat, profile.location.coordinates.lng]);
-    }
-    fetchDemographics();
-  }, [profile]);
-
-  const fetchDemographics = async () => {
+  const fetchDemographics = useCallback(async () => {
     setLoading(true);
     try {
       const lat = profile?.location?.coordinates?.lat || mapCenter[0];
@@ -52,7 +44,19 @@ const SiteStrategist = ({ profile }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [mapCenter, profile]);
+
+  useEffect(() => {
+    if (profile?.location?.coordinates?.lat && profile?.location?.coordinates?.lng) {
+      const nextCenter = [profile.location.coordinates.lat, profile.location.coordinates.lng];
+      setMapCenter((current) =>
+        current[0] === nextCenter[0] && current[1] === nextCenter[1]
+          ? current
+          : nextCenter
+      );
+    }
+    fetchDemographics();
+  }, [fetchDemographics, profile]);
 
   const handleSearch = () => {
     // Simulated geocoding

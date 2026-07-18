@@ -7,7 +7,6 @@ Restaurateur Pro is a comprehensive Restaurant SaaS platform designed to help en
 
 ### Authentication ✅
 - **Email/Password Login** - Simple registration and login
-- **Secret Admin Access** - Code: `restaurateur2026`, 14-day session
 - Removed Google OAuth (per user request)
 
 ### Core Features ✅
@@ -22,7 +21,6 @@ Restaurateur Pro is a comprehensive Restaurant SaaS platform designed to help en
 ### Auth
 - `POST /api/auth/register` - Create account (email, password, name)
 - `POST /api/auth/login` - Login with email/password
-- `POST /api/auth/secret` - Admin access (code: restaurateur2026)
 - `GET /api/auth/me` - Current user
 - `POST /api/auth/logout` - Logout
 
@@ -38,11 +36,10 @@ Restaurateur Pro is a comprehensive Restaurant SaaS platform designed to help en
 - **Backend:** FastAPI, MongoDB
 - **Auth:** Email/Password + Secret Admin
 - **Payments:** Stripe
-- **AI:** GPT-5.2 via Emergent LLM Key
+- **AI:** Provider-configured language model via server-side environment key
 
 ## Test Credentials
 - Email: test@example.com, Password: test123
-- Admin: Code `restaurateur2026` (14-day session)
 
 ## Backlog
 
