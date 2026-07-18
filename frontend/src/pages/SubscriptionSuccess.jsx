@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import axios from "axios";
 import { toast } from "sonner";
@@ -14,16 +14,7 @@ const SubscriptionSuccess = ({ user }) => {
   const [status, setStatus] = useState("checking"); // checking, success, error
   const [paymentDetails, setPaymentDetails] = useState(null);
 
-  useEffect(() => {
-    const sessionId = searchParams.get("session_id");
-    if (sessionId) {
-      pollPaymentStatus(sessionId);
-    } else {
-      setStatus("error");
-    }
-  }, [searchParams]);
-
-  const pollPaymentStatus = async (sessionId, attempts = 0) => {
+  const pollPaymentStatus = useCallback(async function checkPaymentStatus(sessionId, attempts = 0) {
     const maxAttempts = 15;
     const pollInterval = 2000;
 
@@ -49,16 +40,25 @@ const SubscriptionSuccess = ({ user }) => {
       }
 
       // Continue polling
-      setTimeout(() => pollPaymentStatus(sessionId, attempts + 1), pollInterval);
+      setTimeout(() => checkPaymentStatus(sessionId, attempts + 1), pollInterval);
     } catch (error) {
       console.error("Error checking payment status:", error);
       if (attempts < maxAttempts - 1) {
-        setTimeout(() => pollPaymentStatus(sessionId, attempts + 1), pollInterval);
+        setTimeout(() => checkPaymentStatus(sessionId, attempts + 1), pollInterval);
       } else {
         setStatus("error");
       }
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    const sessionId = searchParams.get("session_id");
+    if (sessionId) {
+      pollPaymentStatus(sessionId);
+    } else {
+      setStatus("error");
+    }
+  }, [pollPaymentStatus, searchParams]);
 
   if (status === "checking") {
     return (

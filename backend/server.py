@@ -14,6 +14,9 @@ from datetime import datetime, timezone, timedelta
 import httpx
 import stripe
 import anthropic
+import bcrypt
+import hashlib
+import hmac
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -22,6 +25,17 @@ load_dotenv(ROOT_DIR / '.env')
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
+
+CORS_ORIGINS = [
+    origin.strip().rstrip("/")
+    for origin in os.environ.get(
+        "CORS_ORIGINS",
+        "http://localhost:3000,http://127.0.0.1:3000",
+    ).split(",")
+    if origin.strip()
+]
+if "*" in CORS_ORIGINS:
+    raise RuntimeError("CORS_ORIGINS must contain explicit origins")
 
 app = FastAPI(title="Restaurateur Pro API")
 api_router = APIRouter(prefix="/api")
@@ -388,11 +402,19 @@ async def get_user_profile(user: User) -> dict:
 
 # ==================== AUTH ENDPOINTS ====================
 
-import hashlib
-
 def hash_password(password: str) -> str:
-    """Simple password hashing"""
-    return hashlib.sha256(password.encode()).hexdigest()
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+
+def verify_password(password: str, stored_hash: str) -> bool:
+    if not stored_hash:
+        return False
+    if stored_hash.startswith("$2"):
+        try:
+            return bcrypt.checkpw(password.encode("utf-8"), stored_hash.encode("utf-8"))
+        except ValueError:
+            return False
+    legacy_hash = hashlib.sha256(password.encode("utf-8")).hexdigest()
+    return hmac.compare_digest(legacy_hash, stored_hash)
 
 class RegisterRequest(BaseModel):
     email: str
@@ -409,8 +431,8 @@ async def register(data: RegisterRequest, response: Response):
     if not data.email or not data.password:
         raise HTTPException(status_code=400, detail="Email and password required")
     
-    if len(data.password) < 6:
-        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+    if len(data.password) < 12:
+        raise HTTPException(status_code=400, detail="Password must be at least 12 characters")
     
     # Check if user exists
     existing_user = await db.users.find_one({"email": data.email.lower()})
@@ -472,9 +494,15 @@ async def login(data: LoginRequest, response: Response):
     if not user:
         raise HTTPException(status_code=401, detail="Invalid email or password")
     
-    password_hash = hash_password(data.password)
-    if user.get("password_hash") != password_hash:
+    stored_hash = user.get("password_hash", "")
+    if not verify_password(data.password, stored_hash):
         raise HTTPException(status_code=401, detail="Invalid email or password")
+
+    if not stored_hash.startswith("$2"):
+        await db.users.update_one(
+            {"user_id": user["user_id"]},
+            {"$set": {"password_hash": hash_password(data.password)}},
+        )
     
     user_id = user["user_id"]
     
@@ -523,76 +551,6 @@ async def logout(request: Request, response: Response):
     
     response.delete_cookie(key="session_token", path="/")
     return {"message": "Logged out"}
-
-# Secret all-access login (14-day expiry)
-SECRET_ACCESS_CODE = "restaurateur2026"
-
-@api_router.post("/auth/secret")
-async def secret_login(request: Request, response: Response):
-    """Secret all-access login with 14-day expiry"""
-    body = await request.json()
-    code = body.get("code")
-    
-    if code != SECRET_ACCESS_CODE:
-        raise HTTPException(status_code=401, detail="Invalid access code")
-    
-    # Create or get admin user
-    admin_email = "admin@restaurateurpro.com"
-    existing_user = await db.users.find_one({"email": admin_email}, {"_id": 0})
-    
-    if existing_user:
-        user_id = existing_user["user_id"]
-    else:
-        user_id = f"admin_{uuid.uuid4().hex[:8]}"
-        new_user = {
-            "user_id": user_id,
-            "email": admin_email,
-            "name": "Admin Access",
-            "picture": None,
-            "onboarding_completed": True,
-            "created_at": datetime.now(timezone.utc).isoformat()
-        }
-        await db.users.insert_one(new_user)
-        
-        # Create business profile
-        new_profile = BusinessProfile(user_id=user_id)
-        new_profile.onboarding_completed = True
-        new_profile.concept = ConceptBasics(
-            restaurant_name="Demo Restaurant",
-            concept_type="casual",
-            cuisine_types=["American", "Contemporary"],
-            tagline="Fresh & Local"
-        )
-        profile_doc = new_profile.model_dump()
-        profile_doc["created_at"] = profile_doc["created_at"].isoformat()
-        profile_doc["updated_at"] = profile_doc["updated_at"].isoformat()
-        await db.business_profiles.insert_one(profile_doc)
-    
-    # 14-day session
-    session_token = f"secret_{uuid.uuid4().hex}"
-    expires_at = datetime.now(timezone.utc) + timedelta(days=14)
-    
-    await db.user_sessions.delete_many({"user_id": user_id})
-    await db.user_sessions.insert_one({
-        "user_id": user_id,
-        "session_token": session_token,
-        "expires_at": expires_at.isoformat(),
-        "created_at": datetime.now(timezone.utc).isoformat()
-    })
-    
-    user = await db.users.find_one({"user_id": user_id}, {"_id": 0})
-    
-    response.set_cookie(
-        key="session_token",
-        value=session_token,
-        httponly=True,
-        secure=True,
-        samesite="none",
-        path="/",
-        max_age=14 * 24 * 60 * 60  # 14 days
-    )
-    
-    return {**user, "expires_in_days": 14}
 
 # ==================== BUSINESS PROFILE ENDPOINTS ====================
 
@@ -1414,14 +1372,16 @@ async def stripe_webhook(request: Request):
 
     stripe.api_key = stripe_api_key
     webhook_secret = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
+    if not webhook_secret:
+        raise HTTPException(status_code=503, detail="Stripe webhook is not configured")
     body = await request.body()
     signature = request.headers.get("Stripe-Signature", "")
 
+    if not signature:
+        raise HTTPException(status_code=400, detail="Missing Stripe signature")
+
     try:
-        if webhook_secret and signature:
-            event = stripe.Webhook.construct_event(body, signature, webhook_secret)
-        else:
-            event = json.loads(body)
+        event = stripe.Webhook.construct_event(body, signature, webhook_secret)
     except (stripe.error.SignatureVerificationError, ValueError) as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -1450,10 +1410,18 @@ app.include_router(api_router)
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=CORS_ORIGINS,
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Accept", "Authorization", "Content-Type", "Stripe-Signature"],
 )
+
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    return response
 
 logging.basicConfig(
     level=logging.INFO,

@@ -12,6 +12,7 @@ node_modules/
 
 # Production builds
 /build
+**/build/
 dist/
 
 # Environment files — keep .env.example committed
@@ -51,7 +52,5 @@ frontend/node_modules/.cache/
 # Deployment
 .vercel
 
-# Emergent
-.emergent/
 .chainlit
 chainlit.md

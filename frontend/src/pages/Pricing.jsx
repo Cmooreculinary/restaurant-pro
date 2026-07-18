@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import axios from "axios";
 import { toast } from "sonner";
@@ -20,22 +20,7 @@ const Pricing = ({ user }) => {
   const [checkoutLoading, setCheckoutLoading] = useState(null);
   const [currentSubscription, setCurrentSubscription] = useState(null);
 
-  useEffect(() => {
-    fetchPlans();
-    if (user) {
-      fetchCurrentSubscription();
-    }
-  }, [user]);
-
-  // Check for return from Stripe
-  useEffect(() => {
-    const sessionId = searchParams.get("session_id");
-    if (sessionId) {
-      pollPaymentStatus(sessionId);
-    }
-  }, [searchParams]);
-
-  const fetchPlans = async () => {
+  const fetchPlans = useCallback(async () => {
     try {
       const response = await axios.get(`${API}/subscriptions/plans`);
       setPlans(response.data.plans);
@@ -74,18 +59,18 @@ const Pricing = ({ user }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const fetchCurrentSubscription = async () => {
+  const fetchCurrentSubscription = useCallback(async () => {
     try {
       const response = await axios.get(`${API}/subscriptions/my-subscription`);
       setCurrentSubscription(response.data);
     } catch (error) {
       console.error("Error fetching subscription:", error);
     }
-  };
+  }, []);
 
-  const pollPaymentStatus = async (sessionId, attempts = 0) => {
+  const pollPaymentStatus = useCallback(async function checkPaymentStatus(sessionId, attempts = 0) {
     const maxAttempts = 10;
     const pollInterval = 2000;
 
@@ -111,14 +96,28 @@ const Pricing = ({ user }) => {
       }
 
       // Continue polling
-      setTimeout(() => pollPaymentStatus(sessionId, attempts + 1), pollInterval);
+      setTimeout(() => checkPaymentStatus(sessionId, attempts + 1), pollInterval);
     } catch (error) {
       console.error("Error checking payment status:", error);
       if (attempts < maxAttempts - 1) {
-        setTimeout(() => pollPaymentStatus(sessionId, attempts + 1), pollInterval);
+        setTimeout(() => checkPaymentStatus(sessionId, attempts + 1), pollInterval);
       }
     }
-  };
+  }, [fetchCurrentSubscription, navigate]);
+
+  useEffect(() => {
+    fetchPlans();
+    if (user) {
+      fetchCurrentSubscription();
+    }
+  }, [fetchCurrentSubscription, fetchPlans, user]);
+
+  useEffect(() => {
+    const sessionId = searchParams.get("session_id");
+    if (sessionId) {
+      pollPaymentStatus(sessionId);
+    }
+  }, [pollPaymentStatus, searchParams]);
 
   const handleSubscribe = async (planId) => {
     if (!user) {
